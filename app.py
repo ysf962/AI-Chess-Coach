@@ -1,7 +1,7 @@
 import chess
 import chess.pgn
 import streamlit as st
-from stchess import chess_board
+from stchess import board as chess_board
 
 # 1. Page Configuration
 st.set_page_config(page_title="Bilingual AI Chess Coach", layout="wide")
