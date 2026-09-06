@@ -1,12 +1,13 @@
 import chess
-import chess.svg
 import chess.pgn
 import streamlit as st
+from streamlit_chessboard import st_chessboard
 
+# 1. Page Setup
 st.set_page_config(page_title="Bilingual AI Chess Coach", layout="wide")
-st.title("♟️ Explainable AI Chess Coach")
+st.title("♟️ Chess.com-Style AI Coach")
 
-# Initialize Session State
+# 2. Session State Setup
 if "board" not in st.session_state:
     st.session_state.board = chess.Board()
 if "last_move" not in st.session_state:
@@ -14,6 +15,7 @@ if "last_move" not in st.session_state:
 if "coach_analysis" not in st.session_state:
     st.session_state.coach_analysis = None
 
+# 3. Material Evaluation Engine
 PIECE_VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
 PIECE_SYMBOLS = {chess.PAWN: "♙", chess.KNIGHT: "♘", chess.BISHOP: "♗", chess.ROOK: "♖", chess.QUEEN: "♕", -chess.PAWN: "♟", -chess.KNIGHT: "♞", -chess.BISHOP: "♝", -chess.ROOK: "♜", -chess.QUEEN: "♛"}
 STARTING_PIECES = {chess.PAWN: 8, chess.KNIGHT: 2, chess.BISHOP: 2, chess.ROOK: 2, chess.QUEEN: 1}
@@ -72,53 +74,98 @@ def alpha_beta(board, depth, alpha, beta, is_max):
             if beta <= alpha: break
         return min_eval, best_move
 
-# Sidebar
-st.sidebar.header("🕹️ Options")
-search_depth = st.sidebar.slider("Engine Depth", 1, 4, 2)
-if st.sidebar.button("Reset Game"):
+def generate_explanation(board, move):
+    reasons_en, reasons_ar = [], []
+    dest = move.to_square
+
+    if dest in [chess.D4, chess.D5, chess.E4, chess.E5]:
+        reasons_en.append("Establishes control in the center.")
+        reasons_ar.append("يفرض سيطرة قوية في منتصف الرقعة.")
+
+    if board.is_capture(move):
+        reasons_en.append("Captures active material to gain advantage.")
+        reasons_ar.append("يستحوذ على قطعة منافسة لتحقيق تفوق مادي.")
+
+    board.push(move)
+    if board.is_check():
+        reasons_en.append("Delivers a direct check to the king.")
+        reasons_ar.append("يضع ملك الخصم تحت التهديد (كش ملك).")
+    board.pop()
+
+    if not reasons_en:
+        reasons_en.append("Improves piece position and sight lines.")
+        reasons_ar.append("يحسن تموضع القطع وخطوط الرؤية.")
+
+    return {"en": " ".join(reasons_en), "ar": " ".join(reasons_ar)}
+
+# 4. Sidebar Options
+st.sidebar.header("🕹️ Controls")
+search_depth = st.sidebar.slider("Engine Search Depth", 1, 4, 2)
+if st.sidebar.button("Reset Game Board"):
     st.session_state.board = chess.Board()
     st.session_state.last_move = None
     st.session_state.coach_analysis = None
     st.rerun()
 
-# Layout
+# 5. Interface Layout
 col_board, col_dash = st.columns([1.2, 1])
 
 with col_board:
     mat = get_captured(st.session_state.board)
     st.markdown(f"**🤖 Bot Captured:** {mat['black']}")
-    
-    board_svg = chess.svg.board(board=st.session_state.board, lastmove=st.session_state.last_move, size=380)
-    st.image(board_svg, use_container_width=True)
-    
+
+    # Interactive Touch & Drag Board
+    fen = st.session_state.board.fen()
+    move_data = st_chessboard(fen=fen, key="drag_board")
+
     st.markdown(f"**👤 You Captured:** {mat['white']}")
 
-    st.markdown("### Move Selector")
-    moves = [st.session_state.board.san(m) for m in st.session_state.board.legal_moves]
-    
-    with st.form("chess_move_form"):
-        chosen = st.selectbox("Choose Move:", ["-- Select Move --"] + moves)
-        submitted = st.form_submit_button("Play Move", type="primary")
-        
-        if submitted and chosen != "-- Select Move --":
-            user_m = st.session_state.board.parse_san(chosen)
-            st.session_state.board.push(user_m)
-            st.session_state.last_move = user_m
-            
+    # Process Drag and Drop Moves
+    if move_data and "from" in move_data and "to" in move_data:
+        move_uci = f"{move_data['from']}{move_data['to']}"
+        try_move = chess.Move.from_uci(move_uci)
+
+        # Handle Pawn Promotion Defaulting to Queen
+        if try_move not in st.session_state.board.legal_moves:
+            try_move = chess.Move.from_uci(f"{move_uci}q")
+
+        if try_move in st.session_state.board.legal_moves:
+            st.session_state.board.push(try_move)
+            st.session_state.last_move = try_move
+
+            # AI Counter-Move
             if not st.session_state.board.is_game_over():
-                _, ai_m = alpha_beta(st.session_state.board, search_depth, -float('inf'), float('inf'), st.session_state.board.turn == chess.WHITE)
-                if ai_m:
-                    st.session_state.board.push(ai_m)
-                    st.session_state.last_move = ai_m
+                _, ai_move = alpha_beta(
+                    st.session_state.board, search_depth, -float('inf'), float('inf'),
+                    st.session_state.board.turn == chess.WHITE
+                )
+                if ai_move:
+                    st.session_state.coach_analysis = {
+                        "move": ai_move,
+                        "explanation": generate_explanation(st.session_state.board, ai_move)
+                    }
+                    st.session_state.board.push(ai_move)
+                    st.session_state.last_move = ai_move
             st.rerun()
 
 with col_dash:
-    st.subheader("🎓 AI Coach")
-    if st.button("💡 Get Advice"):
+    st.subheader("🎓 AI Coach Dashboard")
+    if st.button("💡 Ask Coach for Best Move", use_container_width=True):
         if not st.session_state.board.is_game_over():
-            _, rec = alpha_beta(st.session_state.board, search_depth, -float('inf'), float('inf'), st.session_state.board.turn == chess.WHITE)
-            st.session_state.coach_analysis = rec
-            st.rerun()
-            
+            _, recommended_move = alpha_beta(
+                st.session_state.board, search_depth, -float('inf'), float('inf'),
+                st.session_state.board.turn == chess.WHITE
+            )
+            if recommended_move:
+                st.session_state.coach_analysis = {
+                    "move": recommended_move,
+                    "explanation": generate_explanation(st.session_state.board, recommended_move)
+                }
+                st.rerun()
+
     if st.session_state.coach_analysis:
-        st.info(f"Recommended Move: **{st.session_state.coach_analysis}**")
+        analysis = st.session_state.coach_analysis
+        st.success(f"**Recommended Move:** {analysis['move']}")
+        st.markdown("---")
+        st.info(f"**English:** {analysis['explanation']['en']}")
+        st.info(f"**العربية:** {analysis['explanation']['ar']}")
