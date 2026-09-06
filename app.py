@@ -1,79 +1,120 @@
 import chess
+import chess.svg
 import chess.pgn
 import streamlit as st
-from streamlit_chessboard import st_chessboard
 
-# 1. Page Setup
+# 1. Page Configuration
 st.set_page_config(page_title="Bilingual AI Chess Coach", layout="wide")
-st.title("♟️ Chess.com-Style AI Coach")
+st.title("♟️ Explainable AI Chess Coach")
 
 # 2. Session State Setup
 if "board" not in st.session_state:
     st.session_state.board = chess.Board()
 if "last_move" not in st.session_state:
     st.session_state.last_move = None
+if "selected_square" not in st.session_state:
+    st.session_state.selected_square = None
 if "coach_analysis" not in st.session_state:
     st.session_state.coach_analysis = None
 
-# 3. Material Evaluation Engine
-PIECE_VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
-PIECE_SYMBOLS = {chess.PAWN: "♙", chess.KNIGHT: "♘", chess.BISHOP: "♗", chess.ROOK: "♖", chess.QUEEN: "♕", -chess.PAWN: "♟", -chess.KNIGHT: "♞", -chess.BISHOP: "♝", -chess.ROOK: "♜", -chess.QUEEN: "♛"}
-STARTING_PIECES = {chess.PAWN: 8, chess.KNIGHT: 2, chess.BISHOP: 2, chess.ROOK: 2, chess.QUEEN: 1}
+# 3. Material & Evaluation Engine
+PIECE_VALUES = {
+    chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3,
+    chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0
+}
 
-def get_captured(board):
-    w_cap, b_cap = [], []
-    w_pts, b_pts = 0, 0
-    for p_type, count in STARTING_PIECES.items():
-        b_took = count - len(board.pieces(p_type, chess.WHITE))
+PIECE_SYMBOLS = {
+    chess.PAWN: "♙", chess.KNIGHT: "♘", chess.BISHOP: "♗",
+    chess.ROOK: "♖", chess.QUEEN: "♕",
+    -chess.PAWN: "♟", -chess.KNIGHT: "♞", -chess.BISHOP: "♝",
+    -chess.ROOK: "♜", -chess.QUEEN: "♛"
+}
+
+STARTING_PIECES = {
+    chess.PAWN: 8, chess.KNIGHT: 2, chess.BISHOP: 2,
+    chess.ROOK: 2, chess.QUEEN: 1
+}
+
+def get_captured_pieces_and_score(board):
+    white_captured, black_captured = [], []
+    white_points, black_points = 0, 0
+
+    for piece_type, count in STARTING_PIECES.items():
+        w_current = len(board.pieces(piece_type, chess.WHITE))
+        b_current = len(board.pieces(piece_type, chess.BLACK))
+        
+        b_took = count - w_current
         for _ in range(b_took):
-            b_cap.append(PIECE_SYMBOLS[p_type])
-            b_pts += PIECE_VALUES[p_type]
-        w_took = count - len(board.pieces(p_type, chess.BLACK))
+            black_captured.append(PIECE_SYMBOLS[piece_type])
+            black_points += PIECE_VALUES[piece_type]
+
+        w_took = count - b_current
         for _ in range(w_took):
-            w_cap.append(PIECE_SYMBOLS[-p_type])
-            w_pts += PIECE_VALUES[p_type]
-    return {"white": "".join(w_cap), "black": "".join(b_cap), "diff": w_pts - b_pts}
+            white_captured.append(PIECE_SYMBOLS[-piece_type])
+            white_points += PIECE_VALUES[piece_type]
+
+    return {
+        "white_captured": "".join(white_captured),
+        "black_captured": "".join(black_captured),
+        "diff": white_points - black_points
+    }
 
 def evaluate_board(board):
     if board.is_checkmate():
         return -99999 if board.turn == chess.WHITE else 99999
     if board.is_stalemate() or board.is_insufficient_material():
         return 0
+    
     score = 0
-    for sq in chess.SQUARES:
-        p = board.piece_at(sq)
-        if p:
-            val = PIECE_VALUES[p.piece_type] * 100
-            score += val if p.color == chess.WHITE else -val
+    for square in chess.SQUARES:
+        piece = board.piece_at(square)
+        if piece is not None:
+            val = PIECE_VALUES[piece.piece_type] * 100
+            score += val if piece.color == chess.WHITE else -val
+
+    score += board.legal_moves.count() if board.turn == chess.WHITE else -board.legal_moves.count()
+    for sq in [chess.D4, chess.D5, chess.E4, chess.E5]:
+        piece = board.piece_at(sq)
+        if piece is not None:
+            score += 30 if piece.color == chess.WHITE else -30
+
     return score
 
-def alpha_beta(board, depth, alpha, beta, is_max):
+# 4. Alpha-Beta Engine
+def alpha_beta(board, depth, alpha, beta, is_maximizing, node_counter):
+    node_counter[0] += 1
     if depth == 0 or board.is_game_over():
         return evaluate_board(board), None
+
     best_move = None
-    if is_max:
+    if is_maximizing:
         max_eval = -float('inf')
         for move in board.legal_moves:
             board.push(move)
-            eval_score, _ = alpha_beta(board, depth - 1, alpha, beta, False)
+            eval_score, _ = alpha_beta(board, depth - 1, alpha, beta, False, node_counter)
             board.pop()
             if eval_score > max_eval:
-                max_eval, best_move = eval_score, move
+                max_eval = eval_score
+                best_move = move
             alpha = max(alpha, eval_score)
-            if beta <= alpha: break
+            if beta <= alpha:
+                break
         return max_eval, best_move
     else:
         min_eval = float('inf')
         for move in board.legal_moves:
             board.push(move)
-            eval_score, _ = alpha_beta(board, depth - 1, alpha, beta, True)
+            eval_score, _ = alpha_beta(board, depth - 1, alpha, beta, True, node_counter)
             board.pop()
             if eval_score < min_eval:
-                min_eval, best_move = eval_score, move
+                min_eval = eval_score
+                best_move = move
             beta = min(beta, eval_score)
-            if beta <= alpha: break
+            if beta <= alpha:
+                break
         return min_eval, best_move
 
+# 5. Tactical Explanation Engine
 def generate_explanation(board, move):
     reasons_en, reasons_ar = [], []
     dest = move.to_square
@@ -98,74 +139,119 @@ def generate_explanation(board, move):
 
     return {"en": " ".join(reasons_en), "ar": " ".join(reasons_ar)}
 
-# 4. Sidebar Options
-st.sidebar.header("🕹️ Controls")
+# 6. Sidebar Controls
+st.sidebar.header("🕹️ Game Options")
 search_depth = st.sidebar.slider("Engine Search Depth", 1, 4, 2)
-if st.sidebar.button("Reset Game Board"):
+
+if st.sidebar.button("Reset Board"):
     st.session_state.board = chess.Board()
     st.session_state.last_move = None
+    st.session_state.selected_square = None
     st.session_state.coach_analysis = None
     st.rerun()
 
-# 5. Interface Layout
-col_board, col_dash = st.columns([1.2, 1])
+st.sidebar.markdown("---")
+st.sidebar.subheader("📄 Export Match Data")
+pgn_game = chess.pgn.Game.from_board(st.session_state.board)
+st.sidebar.download_button(
+    label="Download Game PGN",
+    data=str(pgn_game),
+    file_name="ai_coach_match.pgn",
+    mime="text/plain"
+)
+
+# 7. Main Interface
+col_board, col_dashboard = st.columns([1.2, 1])
 
 with col_board:
-    mat = get_captured(st.session_state.board)
-    st.markdown(f"**🤖 Bot Captured:** {mat['black']}")
+    st.subheader("Interactive Board")
+    
+    mat = get_captured_pieces_and_score(st.session_state.board)
+    st.markdown(f"**🤖 Bot Captured:** {mat['black_captured']}")
 
-    # Interactive Touch & Drag Board
-    fen = st.session_state.board.fen()
-    move_data = st_chessboard(fen=fen, key="drag_board")
+    # Render SVG Board with Highlights
+    fill_dict = {}
+    if st.session_state.selected_square is not None:
+        fill_dict[st.session_state.selected_square] = "#7b61ff88"
 
-    st.markdown(f"**👤 You Captured:** {mat['white']}")
+    board_svg = chess.svg.board(
+        board=st.session_state.board,
+        lastmove=st.session_state.last_move,
+        fill=fill_dict,
+        size=400
+    )
+    st.image(board_svg, use_container_width=True)
 
-    # Process Drag and Drop Moves
-    if move_data and "from" in move_data and "to" in move_data:
-        move_uci = f"{move_data['from']}{move_data['to']}"
-        try_move = chess.Move.from_uci(move_uci)
+    st.markdown(f"**👤 You Captured:** {mat['white_captured']}")
 
-        # Handle Pawn Promotion Defaulting to Queen
-        if try_move not in st.session_state.board.legal_moves:
-            try_move = chess.Move.from_uci(f"{move_uci}q")
+    # Point-and-Click Square Selector
+    st.markdown("### Play Move")
+    col_from, col_to = st.columns(2)
+    
+    squares = [chess.square_name(sq) for sq in chess.SQUARES]
+    
+    with col_from:
+        from_sq = st.selectbox("From Square:", ["-- Select --"] + sorted(squares), key="from_square_select")
+    with col_to:
+        to_sq = st.selectbox("To Square:", ["-- Select --"] + sorted(squares), key="to_square_select")
 
-        if try_move in st.session_state.board.legal_moves:
-            st.session_state.board.push(try_move)
-            st.session_state.last_move = try_move
+    if st.button("Submit Move", type="primary", use_container_width=True):
+        if from_sq != "-- Select --" and to_sq != "-- Select --":
+            uci_str = f"{from_sq}{to_sq}"
+            try_move = chess.Move.from_uci(uci_str)
+            
+            # Handle Promotion
+            if try_move not in st.session_state.board.legal_moves:
+                try_move = chess.Move.from_uci(f"{uci_str}q")
 
-            # AI Counter-Move
-            if not st.session_state.board.is_game_over():
-                _, ai_move = alpha_beta(
-                    st.session_state.board, search_depth, -float('inf'), float('inf'),
-                    st.session_state.board.turn == chess.WHITE
-                )
-                if ai_move:
-                    st.session_state.coach_analysis = {
-                        "move": ai_move,
-                        "explanation": generate_explanation(st.session_state.board, ai_move)
-                    }
-                    st.session_state.board.push(ai_move)
-                    st.session_state.last_move = ai_move
-            st.rerun()
+            if try_move in st.session_state.board.legal_moves:
+                st.session_state.board.push(try_move)
+                st.session_state.last_move = try_move
 
-with col_dash:
+                # AI Engine Counter-Move
+                if not st.session_state.board.is_game_over():
+                    nodes = [0]
+                    _, ai_move = alpha_beta(
+                        st.session_state.board, search_depth, -float('inf'), float('inf'),
+                        st.session_state.board.turn == chess.WHITE, nodes
+                    )
+                    if ai_move:
+                        st.session_state.coach_analysis = {
+                            "move": ai_move,
+                            "explanation": generate_explanation(st.session_state.board, ai_move),
+                            "nodes": nodes[0]
+                        }
+                        st.session_state.board.push(ai_move)
+                        st.session_state.last_move = ai_move
+                st.rerun()
+            else:
+                st.error("Illegal Move! Please select valid square coordinates.")
+
+with col_dashboard:
     st.subheader("🎓 AI Coach Dashboard")
+
     if st.button("💡 Ask Coach for Best Move", use_container_width=True):
         if not st.session_state.board.is_game_over():
+            nodes = [0]
             _, recommended_move = alpha_beta(
                 st.session_state.board, search_depth, -float('inf'), float('inf'),
-                st.session_state.board.turn == chess.WHITE
+                st.session_state.board.turn == chess.WHITE, nodes
             )
             if recommended_move:
+                explanation = generate_explanation(st.session_state.board, recommended_move)
                 st.session_state.coach_analysis = {
                     "move": recommended_move,
-                    "explanation": generate_explanation(st.session_state.board, recommended_move)
+                    "explanation": explanation,
+                    "nodes": nodes[0]
                 }
                 st.rerun()
 
     if st.session_state.coach_analysis:
         analysis = st.session_state.coach_analysis
         st.success(f"**Recommended Move:** {analysis['move']}")
+        st.metric("Tree Nodes Evaluated", analysis["nodes"])
+
         st.markdown("---")
+        st.markdown("### 💬 Tactical Explanations")
         st.info(f"**English:** {analysis['explanation']['en']}")
         st.info(f"**العربية:** {analysis['explanation']['ar']}")
