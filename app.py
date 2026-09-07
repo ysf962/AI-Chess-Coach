@@ -17,7 +17,6 @@ if "coach_analysis" not in st.session_state:
 if "lang" not in st.session_state:
     st.session_state.lang = "EN"
 
-# 3. Audio Sound Effects
 def play_sound(sound_type):
     sound_urls = {
         "move": "https://images.chesscomfiles.com/chess-themes/sounds/_default/mp3/move-self.mp3",
@@ -27,8 +26,16 @@ def play_sound(sound_type):
     url = sound_urls.get(sound_type)
     if url:
         st.components.v1.html(
-            f'<audio autoplay style="display:none;"><source src="{url}" type="audio/mp3"></audio>',
-            height=0
+            f"""
+            <script>
+                var audio = new Audio('{url}');
+                audio.play().catch(function(error) {{
+                    console.log("Autoplay prevented by browser:", error);
+                }});
+            </script>
+            """,
+            height=0,
+            width=0
         )
 
 # 4. Material & Evaluation Engine
