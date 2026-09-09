@@ -60,7 +60,12 @@ def play_sound(sound_type, enabled):
 
 # 4. Engine & Evaluation System
 PIECE_VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
-PIECE_SYMBOLS = {chess.PAWN: "♙", chess.KNIGHT: "♘", chess.BISHOP: "♗", chess.ROOK: "♖", chess.QUEEN: "♕", -chess.PAWN: "♟", -chess.KNIGHT: "♞", -chess.BISHOP: "♝", -chess.ROOK: "♜", -chess.QUEEN: "♛"}
+PIECE_SYMBOLS = {
+    (chess.PAWN, chess.WHITE): "♙", (chess.KNIGHT, chess.WHITE): "♘", (chess.BISHOP, chess.WHITE): "♗", 
+    (chess.ROOK, chess.WHITE): "♖", (chess.QUEEN, chess.WHITE): "♕", (chess.KING, chess.WHITE): "♔",
+    (chess.PAWN, chess.BLACK): "♟", (chess.KNIGHT, chess.BLACK): "♞", (chess.BISHOP, chess.BLACK): "♝", 
+    (chess.ROOK, chess.BLACK): "♜", (chess.QUEEN, chess.BLACK): "♛", (chess.KING, chess.BLACK): "♚"
+}
 STARTING_PIECES = {chess.PAWN: 8, chess.KNIGHT: 2, chess.BISHOP: 2, chess.ROOK: 2, chess.QUEEN: 1}
 
 def get_captured(board):
@@ -69,11 +74,11 @@ def get_captured(board):
     for p_type, count in STARTING_PIECES.items():
         b_took = count - len(board.pieces(p_type, chess.WHITE))
         for _ in range(b_took):
-            b_cap.append(PIECE_SYMBOLS[p_type])
+            b_cap.append(PIECE_SYMBOLS[(p_type, chess.WHITE)])
             b_pts += PIECE_VALUES[p_type]
         w_took = count - len(board.pieces(p_type, chess.BLACK))
         for _ in range(w_took):
-            w_cap.append(PIECE_SYMBOLS[-p_type])
+            w_cap.append(PIECE_SYMBOLS[(p_type, chess.BLACK)])
             w_pts += PIECE_VALUES[p_type]
     return {"white": "".join(w_cap), "black": "".join(b_cap), "eval": w_pts - b_pts}
 
@@ -181,7 +186,6 @@ st.sidebar.download_button("📥 Export PGN", data=str(pgn_game), file_name="che
 is_ar = st.session_state.lang == "AR"
 col_board, col_dash = st.columns([1.3, 1])
 
-# Click Handler for SVG Square Selections
 def handle_square_click(sq_name):
     board = st.session_state.board
     selected = st.session_state.selected_square
@@ -260,7 +264,7 @@ with col_board:
     st.image(board_svg, use_container_width=True)
     st.markdown(f"**👤 {'أنت' if is_ar else 'You'}:** {mat['white']}")
 
-    # Interactive Touch/Click Grid Selector
+    # Interactive Grid Selector
     st.markdown("**Click pieces and squares to move:**")
     for rank in range(7, -1, -1):
         cols = st.columns(8)
@@ -268,9 +272,8 @@ with col_board:
             sq_idx = chess.square(file, rank)
             sq_name = chess.square_name(sq_idx)
             piece = st.session_state.board.piece_at(sq_idx)
-            piece_symbol = PIECE_SYMBOLS[piece.piece_type if piece.color == chess.WHITE else -piece.piece_type] if piece else "·"
+            piece_symbol = PIECE_SYMBOLS[(piece.piece_type, piece.color)] if piece else "·"
             
-            # Active selected square styling
             label = f"[{piece_symbol}]" if st.session_state.selected_square == sq_name else piece_symbol
             with cols[file]:
                 if st.button(label, key=f"btn_{sq_name}"):
