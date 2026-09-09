@@ -4,34 +4,15 @@ import chess.pgn
 import streamlit as st
 
 # 1. Page Configuration & Custom CSS
+st.set_page_config(page_title="AI Chess Coach Pro", layout="wide", page_icon="♟️")
 
-import chess
-import streamlit as st
-from streamlit_chessboard import chessboard
-
-# Initialize board state
-if "board" not in st.session_state:
-    st.session_state.board = chess.Board()
-
-st.subheader("Interactive Board")
-
-# Render the interactive click-to-move board
-# It returns the updated FEN string after a move is made
-updated_fen = chessboard(
-    board_fen=st.session_state.board.fen(),
-    key="interactive_board"
-)
-
-# Process the move when the returned FEN changes
-if updated_fen and updated_fen != st.session_state.board.fen():
-    # Update the internal python-chess board
-    st.session_state.board.set_fen(updated_fen)
-    st.rerun()
-
-# Reset button
-if st.button("Reset Board"):
-    st.session_state.board.reset()
-    st.rerun()
+st.markdown("""
+    <style>
+    .stApp { background-color: #0e1117; }
+    div[data-testid="stMetricValue"] { font-size: 1.6rem; font-weight: bold; }
+    .stProgress > div > div > div > div { background-color: #00c853; }
+    </style>
+""", unsafe_allow_html=True)
 
 # 2. Session State Initialization
 if "board" not in st.session_state:
