@@ -12,7 +12,6 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 1.6rem; font-weight: bold; }
     .stProgress > div > div > div > div { background-color: #00c853; }
     
-    /* Modern UI Card styling */
     .move-card {
         background-color: #161b22;
         padding: 20px;
@@ -30,6 +29,8 @@ if "last_move" not in st.session_state:
     st.session_state.last_move = None
 if "coach_analysis" not in st.session_state:
     st.session_state.coach_analysis = None
+if "player_color" not in st.session_state:
+    st.session_state.player_color = chess.WHITE
 if "lang" not in st.session_state:
     st.session_state.lang = "EN"
 
@@ -61,7 +62,7 @@ def play_sound(sound_type, enabled):
             width=0
         )
 
-# 4. Engine & Evaluation
+# 4. Engine & Evaluation System
 PIECE_VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
 PIECE_SYMBOLS = {
     (chess.PAWN, chess.WHITE): "♙", (chess.KNIGHT, chess.WHITE): "♘", (chess.BISHOP, chess.WHITE): "♗", 
@@ -73,17 +74,14 @@ STARTING_PIECES = {chess.PAWN: 8, chess.KNIGHT: 2, chess.BISHOP: 2, chess.ROOK: 
 
 def get_captured(board):
     w_cap, b_cap = [], []
-    w_pts, b_pts = 0, 0
     for p_type, count in STARTING_PIECES.items():
         b_took = count - len(board.pieces(p_type, chess.WHITE))
         for _ in range(b_took):
             b_cap.append(PIECE_SYMBOLS[(p_type, chess.WHITE)])
-            b_pts += PIECE_VALUES[p_type]
         w_took = count - len(board.pieces(p_type, chess.BLACK))
         for _ in range(w_took):
             w_cap.append(PIECE_SYMBOLS[(p_type, chess.BLACK)])
-            w_pts += PIECE_VALUES[p_type]
-    return {"white": "".join(w_cap), "black": "".join(b_cap), "eval": w_pts - b_pts}
+    return {"white": "".join(w_cap), "black": "".join(b_cap)}
 
 def evaluate_board(board):
     if board.is_checkmate():
@@ -99,22 +97,41 @@ def evaluate_board(board):
     score += board.legal_moves.count() if board.turn == chess.WHITE else -board.legal_moves.count()
     return score
 
-def get_best_move(board):
+def get_best_move(board, is_max):
     best_move = None
-    best_eval = float('inf')
+    best_eval = -float('inf') if is_max else float('inf')
     for m in board.legal_moves:
         board.push(m)
         ev = evaluate_board(board)
         board.pop()
-        if ev < best_eval:
+        if is_max and ev > best_eval:
+            best_eval = ev
+            best_move = m
+        elif not is_max and ev < best_eval:
             best_eval = ev
             best_move = m
     return best_move
 
-# 5. Sidebar
+# 5. Sidebar Controls
 st.sidebar.title("🎮 Controls & Settings")
 st.session_state.lang = st.sidebar.radio("🌐 Language / اللغة", ["EN", "AR"], index=0 if st.session_state.lang == "EN" else 1)
 audio_enabled = st.sidebar.toggle("🔊 Enable Audio", value=True)
+
+chosen_side = st.sidebar.radio("♟️ Choose Side", ["White", "Black"])
+new_color = chess.WHITE if chosen_side == "White" else chess.BLACK
+
+if new_color != st.session_state.player_color:
+    st.session_state.player_color = new_color
+    st.session_state.board = chess.Board()
+    st.session_state.last_move = None
+    st.session_state.coach_analysis = None
+    # Trigger bot move immediately if player chooses Black
+    if st.session_state.player_color == chess.BLACK:
+        ai_m = get_best_move(st.session_state.board, True)
+        if ai_m:
+            st.session_state.board.push(ai_m)
+            st.session_state.last_move = ai_m
+    st.rerun()
 
 theme_choice = st.sidebar.selectbox("🎨 Board Theme", ["Classic Wood", "Lichess Green", "Midnight Dark", "Neon Cyber"])
 THEMES = {
@@ -128,6 +145,11 @@ if st.sidebar.button("🔄 Reset Game", use_container_width=True):
     st.session_state.board = chess.Board()
     st.session_state.last_move = None
     st.session_state.coach_analysis = None
+    if st.session_state.player_color == chess.BLACK:
+        ai_m = get_best_move(st.session_state.board, True)
+        if ai_m:
+            st.session_state.board.push(ai_m)
+            st.session_state.last_move = ai_m
     st.rerun()
 
 st.sidebar.markdown("---")
@@ -138,26 +160,31 @@ st.sidebar.download_button("📥 Export PGN", data=str(pgn_game), file_name="che
 is_ar = st.session_state.lang == "AR"
 col_board, col_dash = st.columns([1.3, 1])
 
-with col_board:
-    mat = get_captured(st.session_state.board)
-    st.markdown(f"**🤖 {'الروبوت' if is_ar else 'Bot'}:** {mat['black']}")
+board = st.session_state.board
+player_turn = (board.turn == st.session_state.player_color)
 
-    # Clean SVG Board Rendering
+with col_board:
+    mat = get_captured(board)
+    top_captures = mat['white'] if st.session_state.player_color == chess.BLACK else mat['black']
+    bottom_captures = mat['black'] if st.session_state.player_color == chess.BLACK else mat['white']
+
+    st.markdown(f"**🤖 {'الروبوت' if is_ar else 'Bot'}:** {top_captures}")
+
+    # Render Board SVG flipped according to player color
     theme_colors = THEMES[theme_choice]
     board_svg = chess.svg.board(
-        board=st.session_state.board,
+        board=board,
+        orientation=st.session_state.player_color,
         lastmove=st.session_state.last_move,
         colors={"square light": theme_colors["square_light"], "square dark": theme_colors["square_dark"]},
         size=400
     )
     st.image(board_svg, use_container_width=True)
 
-    st.markdown(f"**👤 {'أنت' if is_ar else 'You'}:** {mat['white']}")
+    st.markdown(f"**👤 {'أنت' if is_ar else 'You'}:** {bottom_captures}")
 
-    # Modern Selectors for Piece & Square
-    board = st.session_state.board
-    if not board.is_game_over():
-        # Get all legal moves and group legal source squares
+    # Modern Move Selectors
+    if player_turn and not board.is_game_over():
         legal_moves = list(board.legal_moves)
         from_squares = sorted(list(set(m.from_square for m in legal_moves)))
         from_square_names = [chess.square_name(sq) for sq in from_squares]
@@ -170,7 +197,6 @@ with col_board:
             with c1:
                 selected_from = st.selectbox("1. " + ("اختر القطعة" if is_ar else "Select Piece"), from_square_names)
             
-            # Filter destination squares based on chosen piece
             from_sq_idx = chess.parse_square(selected_from)
             to_squares = sorted([m.to_square for m in legal_moves if m.from_square == from_sq_idx])
             to_square_names = [chess.square_name(sq) for sq in to_squares]
@@ -192,7 +218,8 @@ with col_board:
 
                     # Bot Counter-Move
                     if not board.is_game_over():
-                        ai_move = get_best_move(board)
+                        bot_is_max = (st.session_state.player_color == chess.BLACK)
+                        ai_move = get_best_move(board, bot_is_max)
                         if ai_move:
                             board.push(ai_move)
                             st.session_state.last_move = ai_move
@@ -203,7 +230,7 @@ with col_board:
             st.markdown('</div>', unsafe_allow_html=True)
 
     # Position Evaluation Bar
-    curr_eval = evaluate_board(st.session_state.board)
+    curr_eval = evaluate_board(board)
     norm_eval = max(0.0, min(1.0, (curr_eval + 1000) / 2000))
     st.progress(norm_eval, text=f"Position Score: {curr_eval/100:+.2f}")
 
@@ -212,20 +239,21 @@ with col_dash:
 
     with tab_coach:
         if st.button("💡 " + ("طلب نصيحة" if is_ar else "Ask Coach Best Move"), use_container_width=True):
-            if not st.session_state.board.is_game_over():
-                rec_move = get_best_move(st.session_state.board)
+            if not board.is_game_over():
+                rec_is_max = (st.session_state.player_color == chess.WHITE)
+                rec_move = get_best_move(board, rec_is_max)
                 if rec_move:
-                    st.session_state.coach_analysis = st.session_state.board.san(rec_move)
+                    st.session_state.coach_analysis = board.san(rec_move)
                     st.rerun()
 
         if st.session_state.coach_analysis:
             st.info(f"**Recommended Move:** {st.session_state.coach_analysis}")
 
-        if st.session_state.board.is_game_over():
+        if board.is_game_over():
             st.error("🏆 Game Over!")
 
     with tab_history:
-        move_stack = list(st.session_state.board.move_stack)
+        move_stack = list(board.move_stack)
         if move_stack:
             san_moves = []
             tb = chess.Board()
