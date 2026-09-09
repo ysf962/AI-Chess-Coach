@@ -3,10 +3,9 @@ import chess.svg
 import chess.pgn
 import streamlit as st
 
-# 1. Page Configuration
+# 1. Page Configuration & Custom CSS
 st.set_page_config(page_title="AI Chess Coach Pro", layout="wide", page_icon="♟️")
 
-# Custom CSS for modern styling
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; }
@@ -20,6 +19,8 @@ if "board" not in st.session_state:
     st.session_state.board = chess.Board()
 if "history" not in st.session_state:
     st.session_state.history = [chess.Board().fen()]
+if "move_records" not in st.session_state:
+    st.session_state.move_records = []
 if "nav_index" not in st.session_state:
     st.session_state.nav_index = 0
 if "last_move" not in st.session_state:
@@ -43,9 +44,15 @@ def play_sound(sound_type, enabled):
     if url:
         st.components.v1.html(
             f"""
+            <audio id="chess-sound" autoplay>
+                <source src="{url}" type="audio/mp3">
+            </audio>
             <script>
-                var audio = new Audio('{url}');
-                audio.play().catch(function(e) {{ console.log("Audio play blocked:", e); }});
+                var audio = document.getElementById('chess-sound');
+                if (audio) {{
+                    audio.volume = 1.0;
+                    audio.play().catch(function(e) {{ console.log("Audio play blocked:", e); }});
+                }}
             </script>
             """,
             height=0,
@@ -135,10 +142,10 @@ def alpha_beta(board, depth, alpha, beta, is_max):
 
 def classify_move(prev_eval, curr_eval):
     diff = curr_eval - prev_eval
-    if diff >= 150: return ("‼️ Great Move", "‼️ حركة ممتازة")
-    elif diff >= -30: return ("⭐ Best Move", "⭐ أفضل حركة")
-    elif diff >= -150: return ("?! Inaccuracy", "?! عدم دقة")
-    else: return ("?? Blunder", "?? خطأ فادح")
+    if diff >= 150: return ("‼️ Great", "‼️ ممتاز", "🟩")
+    elif diff >= -30: return ("⭐ Best", "⭐ الأفضل", "🟩")
+    elif diff >= -150: return ("?! Inaccuracy", "?! عدم دقة", "🟨")
+    else: return ("?? Blunder", "?? خطأ فادح", "🟥")
 
 def generate_explanation(board, move):
     reasons_en, reasons_ar = [], []
@@ -163,8 +170,8 @@ def generate_explanation(board, move):
 st.sidebar.title("🎮 Controls & Settings")
 st.session_state.lang = st.sidebar.radio("🌐 Language / اللغة", ["EN", "AR"], index=0 if st.session_state.lang == "EN" else 1)
 audio_enabled = st.sidebar.toggle("🔊 Enable Audio", value=True)
+flip_board = st.sidebar.toggle("🔄 Flip Board (Play as Black)", value=False)
 
-# Correct SVG Theme Colors Mapping
 theme_choice = st.sidebar.selectbox("🎨 Board Theme", ["Classic Wood", "Lichess Green", "Midnight Dark", "Neon Cyber"])
 THEMES = {
     "Classic Wood": {"square_light": "#f0d9b5", "square_dark": "#b58863"},
@@ -179,6 +186,7 @@ search_depth = {"Beginner": 1, "Intermediate": 2, "Advanced": 3}[diff_label]
 if st.sidebar.button("🔄 Reset Game", use_container_width=True):
     st.session_state.board = chess.Board()
     st.session_state.history = [chess.Board().fen()]
+    st.session_state.move_records = []
     st.session_state.nav_index = 0
     st.session_state.last_move = None
     st.session_state.coach_analysis = None
@@ -195,19 +203,30 @@ st.title("♟️ " + ("مدرب الشطرنج الذكي المتقدم" if is_
 op_en, op_ar = detect_opening(st.session_state.board)
 st.caption(f"📖 **{'الافتتاح' if is_ar else 'Opening'}:** {op_ar if is_ar else op_en}")
 
+# Audio Test Button
+if st.button("🔊 Test Audio"):
+    play_sound("move", True)
+
 col_board, col_dash = st.columns([1.3, 1])
 
 with col_board:
     mat = get_captured(st.session_state.board)
     st.markdown(f"**🤖 {'الروبوت' if is_ar else 'Bot'}:** {mat['black']}")
 
-    # Render Board with Active Custom Theme
     display_board = chess.Board(st.session_state.history[st.session_state.nav_index])
     theme_colors = THEMES[theme_choice]
     
+    # Generate arrows if coach recommended a move
+    arrows = []
+    if st.session_state.coach_analysis and "move" in st.session_state.coach_analysis:
+        rec_move = st.session_state.coach_analysis["move"]
+        arrows = [chess.svg.Arrow(rec_move.from_square, rec_move.to_square, color="#00ff00cc")]
+
     board_svg = chess.svg.board(
         board=display_board,
         lastmove=st.session_state.last_move,
+        arrows=arrows,
+        orientation=chess.BLACK if flip_board else chess.WHITE,
         colors={"square light": theme_colors["square_light"], "square dark": theme_colors["square_dark"]},
         size=420
     )
@@ -234,7 +253,7 @@ with col_board:
         st.session_state.nav_index = len(st.session_state.history) - 1
         st.rerun()
 
-    # Move Submission Input
+    # Move Submission
     if not st.session_state.board.is_game_over():
         st.markdown("### " + ("اختر حركتك" if is_ar else "Select Move"))
         squares = [chess.square_name(sq) for sq in chess.SQUARES]
@@ -253,6 +272,7 @@ with col_board:
 
                 if try_move in st.session_state.board.legal_moves:
                     p_eval = evaluate_board(st.session_state.board)
+                    san_str = st.session_state.board.san(try_move)
                     sound = "capture" if st.session_state.board.is_capture(try_move) else "move"
                     
                     st.session_state.board.push(try_move)
@@ -262,12 +282,19 @@ with col_board:
                     
                     c_eval = evaluate_board(st.session_state.board)
                     quality = classify_move(p_eval, c_eval)
+                    
+                    st.session_state.move_records.append({
+                        "san": san_str,
+                        "badge": f"{quality[2]} {quality[0]}"
+                    })
+                    
                     play_sound(sound, audio_enabled)
 
-                    # Engine Counter Move
+                    # Engine Response Move
                     if not st.session_state.board.is_game_over():
                         _, ai_move = alpha_beta(st.session_state.board, search_depth, -float('inf'), float('inf'), st.session_state.board.turn == chess.WHITE)
                         if ai_move:
+                            ai_san = st.session_state.board.san(ai_move)
                             st.session_state.coach_analysis = {
                                 "move": ai_move,
                                 "explanation": generate_explanation(st.session_state.board, ai_move),
@@ -277,6 +304,11 @@ with col_board:
                             st.session_state.history.append(st.session_state.board.fen())
                             st.session_state.nav_index = len(st.session_state.history) - 1
                             st.session_state.last_move = ai_move
+                            
+                            st.session_state.move_records.append({
+                                "san": ai_san,
+                                "badge": "🤖 Bot"
+                            })
                     else:
                         play_sound("game_over", audio_enabled)
                     st.rerun()
@@ -292,7 +324,7 @@ with col_dash:
                     st.session_state.coach_analysis = {
                         "move": rec,
                         "explanation": generate_explanation(st.session_state.board, rec),
-                        "quality": ("⭐ Recommended", "⭐ موصى به")
+                        "quality": ("⭐ Recommended", "⭐ موصى به", "🟩")
                     }
                     st.rerun()
 
@@ -307,14 +339,15 @@ with col_dash:
             st.error("🏆 Game Over!")
 
     with tab_history:
-        move_stack = list(st.session_state.board.move_stack)
-        if move_stack:
-            san_moves = []
-            tb = chess.Board()
-            for m in move_stack:
-                san_moves.append(tb.san(m))
-                tb.push(m)
+        records = st.session_state.move_records
+        if records:
             table = []
-            for i in range(0, len(san_moves), 2):
-                table.append({"#": (i//2)+1, "White": san_moves[i], "Black": san_moves[i+1] if i+1 < len(san_moves) else ""})
+            for i in range(0, len(records), 2):
+                w_item = records[i]
+                b_item = records[i+1] if i+1 < len(records) else None
+                table.append({
+                    "#": (i//2) + 1,
+                    "White": f"{w_item['san']} ({w_item['badge']})",
+                    "Black": f"{b_item['san']} ({b_item['badge']})" if b_item else ""
+                })
             st.dataframe(table, use_container_width=True, hide_index=True)
