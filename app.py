@@ -4,7 +4,6 @@ import chess.pgn
 import streamlit as st
 
 # 1. Page Configuration & Custom CSS
-st.set_page_config(page_title="AI Chess Coach Pro", layout="wide", page_icon="♟️")
 
 st.markdown("""
     <style>
