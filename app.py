@@ -54,7 +54,7 @@ if "difficulty" not in st.session_state:
 if "lang" not in st.session_state:
     st.session_state.lang = "EN"
 if "user_elo" not in st.session_state:
-    st.session_state.user_elo = 1200
+    st.session_state.user_elo = 800  # Set starting ELO to 800
 if "unlocked_badges" not in st.session_state:
     st.session_state.unlocked_badges = set()
 if "blunder_puzzles" not in st.session_state:
