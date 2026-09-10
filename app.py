@@ -7,7 +7,7 @@ import random
 # ==========================================
 # 1. PAGE CONFIG & STYLES
 # ==========================================
-st.set_page_config(page_title="Ultimate AI Chess Coach Pro", layout="wide", page_icon="♟️")
+st.set_page_config(page_title="AI Chess Coach Pro", layout="wide", page_icon="♟️")
 
 st.markdown("""
     <style>
@@ -54,7 +54,7 @@ if "difficulty" not in st.session_state:
 if "lang" not in st.session_state:
     st.session_state.lang = "EN"
 if "user_elo" not in st.session_state:
-    st.session_state.user_elo = 800  # Set starting ELO to 800
+    st.session_state.user_elo = 800  # Starting ELO set to 800
 if "unlocked_badges" not in st.session_state:
     st.session_state.unlocked_badges = set()
 if "blunder_puzzles" not in st.session_state:
@@ -469,7 +469,6 @@ st.sidebar.download_button("📥 Export PGN", data=str(pgn_game), file_name="che
 # 8. MAIN DASHBOARD LAYOUT
 # ==========================================
 is_ar = st.session_state.lang == "AR"
-st.title("♟️ Ultimate AI Chess Coach Pro")
 
 col_board, col_dash = st.columns([1.3, 1])
 board = st.session_state.board
