@@ -1,3 +1,4 @@
+import random
 import chess
 import chess.svg
 import chess.pgn
@@ -29,8 +30,12 @@ if "last_move" not in st.session_state:
     st.session_state.last_move = None
 if "coach_analysis" not in st.session_state:
     st.session_state.coach_analysis = None
+if "last_move_feedback" not in st.session_state:
+    st.session_state.last_move_feedback = None
 if "player_color" not in st.session_state:
     st.session_state.player_color = chess.WHITE
+if "difficulty" not in st.session_state:
+    st.session_state.difficulty = "Medium"
 if "lang" not in st.session_state:
     st.session_state.lang = "EN"
 
@@ -62,8 +67,8 @@ def play_sound(sound_type, enabled):
             width=0
         )
 
-# 4. Engine & Evaluation System
-PIECE_VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
+# 4. Engine, Evaluation & Difficulty Logic
+PIECE_VALUES = {chess.PAWN: 100, chess.KNIGHT: 320, chess.BISHOP: 330, chess.ROOK: 500, chess.QUEEN: 900, chess.KING: 20000}
 PIECE_SYMBOLS = {
     (chess.PAWN, chess.WHITE): "♙", (chess.KNIGHT, chess.WHITE): "♘", (chess.BISHOP, chess.WHITE): "♗", 
     (chess.ROOK, chess.WHITE): "♖", (chess.QUEEN, chess.WHITE): "♕", (chess.KING, chess.WHITE): "♔",
@@ -92,30 +97,90 @@ def evaluate_board(board):
     for sq in chess.SQUARES:
         p = board.piece_at(sq)
         if p:
-            val = PIECE_VALUES[p.piece_type] * 100
+            val = PIECE_VALUES[p.piece_type]
             score += val if p.color == chess.WHITE else -val
-    score += board.legal_moves.count() if board.turn == chess.WHITE else -board.legal_moves.count()
+    score += (board.legal_moves.count() if board.turn == chess.WHITE else -board.legal_moves.count()) * 5
     return score
 
-def get_best_move(board, is_max):
+def minimax(board, depth, alpha, beta, is_maximizing):
+    if depth == 0 or board.is_game_over():
+        return evaluate_board(board), None
+
     best_move = None
-    best_eval = -float('inf') if is_max else float('inf')
-    for m in board.legal_moves:
-        board.push(m)
-        ev = evaluate_board(board)
-        board.pop()
-        if is_max and ev > best_eval:
-            best_eval = ev
-            best_move = m
-        elif not is_max and ev < best_eval:
-            best_eval = ev
-            best_move = m
-    return best_move
+    if is_maximizing:
+        max_eval = -float('inf')
+        for move in board.legal_moves:
+            board.push(move)
+            eval_val, _ = minimax(board, depth - 1, alpha, beta, False)
+            board.pop()
+            if eval_val > max_eval:
+                max_eval = eval_val
+                best_move = move
+            alpha = max(alpha, eval_val)
+            if beta <= alpha:
+                break
+        return max_eval, best_move
+    else:
+        min_eval = float('inf')
+        for move in board.legal_moves:
+            board.push(move)
+            eval_val, _ = minimax(board, depth - 1, alpha, beta, True)
+            board.pop()
+            if eval_val < min_eval:
+                min_eval = eval_val
+                best_move = move
+            beta = min(beta, eval_val)
+            if beta <= alpha:
+                break
+        return min_eval, best_move
+
+def get_bot_move(board, level, is_black):
+    legal_moves = list(board.legal_moves)
+    if not legal_moves:
+        return None
+
+    if level == "Easy":
+        return random.choice(legal_moves)
+    elif level == "Medium":
+        _, move = minimax(board, depth=1, alpha=-float('inf'), beta=float('inf'), is_maximizing=not is_black)
+        return move or random.choice(legal_moves)
+    else:  # Hard
+        _, move = minimax(board, depth=2, alpha=-float('inf'), beta=float('inf'), is_maximizing=not is_black)
+        return move or random.choice(legal_moves)
+
+def analyze_move_quality(board_before, move, is_white_player):
+    eval_before = evaluate_board(board_before)
+    
+    # Get top move
+    _, best_move = minimax(board_before, depth=2, alpha=-float('inf'), beta=float('inf'), is_maximizing=is_white_player)
+    
+    board_before.push(move)
+    eval_after = evaluate_board(board_before)
+    board_before.pop()
+
+    # Score drop relative to turn side
+    score_change = (eval_after - eval_before) if is_white_player else (eval_before - eval_after)
+    is_sacrifice = board_before.is_capture(move) and PIECE_VALUES.get(board_before.piece_at(move.from_square).piece_type, 0) > 300
+
+    if move == best_move and is_sacrifice:
+        return "💎 Brilliant Move!!", "success"
+    elif move == best_move:
+        return "⭐ Best Move!", "success"
+    elif score_change >= -30:
+        return "✅ Good Move", "info"
+    elif score_change >= -100:
+        return "⚠️ Inaccuracy", "warning"
+    elif score_change >= -250:
+        return "❌ Mistake", "warning"
+    else:
+        return "🔴 Blunder!", "error"
 
 # 5. Sidebar Controls
 st.sidebar.title("🎮 Controls & Settings")
 st.session_state.lang = st.sidebar.radio("🌐 Language / اللغة", ["EN", "AR"], index=0 if st.session_state.lang == "EN" else 1)
 audio_enabled = st.sidebar.toggle("🔊 Enable Audio", value=True)
+
+st.session_state.difficulty = st.sidebar.selectbox("🎯 Bot Difficulty", ["Easy", "Medium", "Hard"], index=1)
 
 chosen_side = st.sidebar.radio("♟️ Choose Side", ["White", "Black"])
 new_color = chess.WHITE if chosen_side == "White" else chess.BLACK
@@ -125,9 +190,9 @@ if new_color != st.session_state.player_color:
     st.session_state.board = chess.Board()
     st.session_state.last_move = None
     st.session_state.coach_analysis = None
-    # Trigger bot move immediately if player chooses Black
+    st.session_state.last_move_feedback = None
     if st.session_state.player_color == chess.BLACK:
-        ai_m = get_best_move(st.session_state.board, True)
+        ai_m = get_bot_move(st.session_state.board, st.session_state.difficulty, is_black=False)
         if ai_m:
             st.session_state.board.push(ai_m)
             st.session_state.last_move = ai_m
@@ -145,8 +210,9 @@ if st.sidebar.button("🔄 Reset Game", use_container_width=True):
     st.session_state.board = chess.Board()
     st.session_state.last_move = None
     st.session_state.coach_analysis = None
+    st.session_state.last_move_feedback = None
     if st.session_state.player_color == chess.BLACK:
-        ai_m = get_best_move(st.session_state.board, True)
+        ai_m = get_bot_move(st.session_state.board, st.session_state.difficulty, is_black=False)
         if ai_m:
             st.session_state.board.push(ai_m)
             st.session_state.last_move = ai_m
@@ -168,9 +234,8 @@ with col_board:
     top_captures = mat['white'] if st.session_state.player_color == chess.BLACK else mat['black']
     bottom_captures = mat['black'] if st.session_state.player_color == chess.BLACK else mat['white']
 
-    st.markdown(f"**🤖 {'الروبوت' if is_ar else 'Bot'}:** {top_captures}")
+    st.markdown(f"**🤖 Bot ({st.session_state.difficulty}):** {top_captures}")
 
-    # Render Board SVG flipped according to player color
     theme_colors = THEMES[theme_choice]
     board_svg = chess.svg.board(
         board=board,
@@ -183,7 +248,6 @@ with col_board:
 
     st.markdown(f"**👤 {'أنت' if is_ar else 'You'}:** {bottom_captures}")
 
-    # Modern Move Selectors
     if player_turn and not board.is_game_over():
         legal_moves = list(board.legal_moves)
         from_squares = sorted(list(set(m.from_square for m in legal_moves)))
@@ -211,15 +275,19 @@ with col_board:
                     move = chess.Move.from_uci(f"{move_uci}q")
 
                 if move in board.legal_moves:
+                    # Analyze player move quality before executing
+                    label, alert_type = analyze_move_quality(board, move, st.session_state.player_color == chess.WHITE)
+                    st.session_state.last_move_feedback = (label, alert_type)
+
                     sound = "capture" if board.is_capture(move) else "move"
                     board.push(move)
                     st.session_state.last_move = move
                     play_sound(sound, audio_enabled)
 
-                    # Bot Counter-Move
+                    # Bot Turn
                     if not board.is_game_over():
-                        bot_is_max = (st.session_state.player_color == chess.BLACK)
-                        ai_move = get_best_move(board, bot_is_max)
+                        bot_is_black = (st.session_state.player_color == chess.WHITE)
+                        ai_move = get_bot_move(board, st.session_state.difficulty, is_black=bot_is_black)
                         if ai_move:
                             board.push(ai_move)
                             st.session_state.last_move = ai_move
@@ -229,19 +297,22 @@ with col_board:
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # Position Evaluation Bar
     curr_eval = evaluate_board(board)
-    norm_eval = max(0.0, min(1.0, (curr_eval + 1000) / 2000))
+    norm_eval = max(0.0, min(1.0, (curr_eval + 2000) / 4000))
     st.progress(norm_eval, text=f"Position Score: {curr_eval/100:+.2f}")
 
 with col_dash:
     tab_coach, tab_history = st.tabs(["🎓 " + ("المدرب" if is_ar else "Coach"), "📜 " + ("سجل الحركات" if is_ar else "History")])
 
     with tab_coach:
+        if st.session_state.last_move_feedback:
+            lbl, box_style = st.session_state.last_move_feedback
+            getattr(st, box_style)(f"Last Move Analysis: {lbl}")
+
         if st.button("💡 " + ("طلب نصيحة" if is_ar else "Ask Coach Best Move"), use_container_width=True):
             if not board.is_game_over():
                 rec_is_max = (st.session_state.player_color == chess.WHITE)
-                rec_move = get_best_move(board, rec_is_max)
+                _, rec_move = minimax(board, depth=2, alpha=-float('inf'), beta=float('inf'), is_maximizing=rec_is_max)
                 if rec_move:
                     st.session_state.coach_analysis = board.san(rec_move)
                     st.rerun()
