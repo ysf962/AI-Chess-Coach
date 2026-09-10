@@ -512,9 +512,9 @@ with col_board:
                 unsafe_allow_html=True
             )
         with c2:
-            st.image(board_svg, use_container_width=False)
+            st.image(board_svg, width="content")
     else:
-        st.image(board_svg, use_container_width=False)
+        st.image(board_svg, width="content")
 
     st.markdown(f"**👤 {'أنت' if is_ar else 'You'}:** {bottom_captures}")
 
