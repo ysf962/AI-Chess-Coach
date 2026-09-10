@@ -5,7 +5,7 @@ import chess.pgn
 import streamlit as st
 
 # 1. Page Configuration
-st.set_page_config(page_title="AI Chess Coach Pro", layout="wide", page_icon="♟️")
+st.set_page_config(page_title="Magnus AI Chess Coach Pro", layout="wide", page_icon="♟️")
 
 st.markdown("""
     <style>
@@ -19,6 +19,13 @@ st.markdown("""
         border-radius: 12px;
         border: 1px solid #30363d;
         margin-top: 15px;
+    }
+    .magnus-box {
+        background-color: #1f242d;
+        border-left: 5px solid #00c853;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -38,6 +45,8 @@ if "difficulty" not in st.session_state:
     st.session_state.difficulty = "Medium"
 if "lang" not in st.session_state:
     st.session_state.lang = "EN"
+if "move_eval_history" not in st.session_state:
+    st.session_state.move_eval_history = []  # Stores (player_move, quality_label)
 
 # 3. Audio Controller
 def play_sound(sound_type, enabled):
@@ -67,7 +76,41 @@ def play_sound(sound_type, enabled):
             width=0
         )
 
-# 4. Engine, Evaluation & Difficulty Logic
+# 4. Magnus Quotes Generator
+MAGNUS_QUOTES = {
+    "Brilliant": [
+        "Now that's a move I'd play! Great tactical vision.",
+        "Precision execution. You're pressing the advantage like a champion.",
+        "Fantastic piece coordination. Keep squeezing!"
+    ],
+    "Best": [
+        "Solid, precise, and logical. Exactly what the position requires.",
+        "Good move. You're keeping control of the board.",
+        "Simple, clean chess. Don't give them any counterplay."
+    ],
+    "Good": [
+        "Playable, but there was a slightly cleaner line available.",
+        "Not bad, but you need to build more pressure.",
+        "Decent move. Keep your pieces active."
+    ],
+    "Inaccuracy": [
+        "A bit careless. You're giving away slight initiative.",
+        "Hmm, you had better options. Look for more energetic squares.",
+        "That allows them a comfortable defense. Stay sharper."
+    ],
+    "Mistake": [
+        "That's a clear mistake. You just handed them control.",
+        "Why give up activity like that? Always look at their dynamic threats.",
+        "Not precise. You're making life much harder than it needs to be."
+    ],
+    "Blunder": [
+        "That's a blunder! Completely unforced error.",
+        "What was that? You just dropped serious material or evaluation.",
+        "Huge tactical oversight! In high-level chess, that loses instantly."
+    ]
+}
+
+# 5. Engine & Evaluation Logic
 PIECE_VALUES = {chess.PAWN: 100, chess.KNIGHT: 320, chess.BISHOP: 330, chess.ROOK: 500, chess.QUEEN: 900, chess.KING: 20000}
 PIECE_SYMBOLS = {
     (chess.PAWN, chess.WHITE): "♙", (chess.KNIGHT, chess.WHITE): "♘", (chess.BISHOP, chess.WHITE): "♗", 
@@ -150,32 +193,38 @@ def get_bot_move(board, level, is_black):
 
 def analyze_move_quality(board_before, move, is_white_player):
     eval_before = evaluate_board(board_before)
-    
-    # Get top move
     _, best_move = minimax(board_before, depth=2, alpha=-float('inf'), beta=float('inf'), is_maximizing=is_white_player)
     
     board_before.push(move)
     eval_after = evaluate_board(board_before)
     board_before.pop()
 
-    # Score drop relative to turn side
     score_change = (eval_after - eval_before) if is_white_player else (eval_before - eval_after)
     is_sacrifice = board_before.is_capture(move) and PIECE_VALUES.get(board_before.piece_at(move.from_square).piece_type, 0) > 300
 
     if move == best_move and is_sacrifice:
-        return "💎 Brilliant Move!!", "success"
+        cat = "Brilliant"
+        alert = "success"
     elif move == best_move:
-        return "⭐ Best Move!", "success"
+        cat = "Best"
+        alert = "success"
     elif score_change >= -30:
-        return "✅ Good Move", "info"
+        cat = "Good"
+        alert = "info"
     elif score_change >= -100:
-        return "⚠️ Inaccuracy", "warning"
+        cat = "Inaccuracy"
+        alert = "warning"
     elif score_change >= -250:
-        return "❌ Mistake", "warning"
+        cat = "Mistake"
+        alert = "warning"
     else:
-        return "🔴 Blunder!", "error"
+        cat = "Blunder"
+        alert = "error"
 
-# 5. Sidebar Controls
+    quote = random.choice(MAGNUS_QUOTES[cat])
+    return cat, f"**{cat} Move!** — *\"{quote}\"*", alert
+
+# 6. Sidebar Controls
 st.sidebar.title("🎮 Controls & Settings")
 st.session_state.lang = st.sidebar.radio("🌐 Language / اللغة", ["EN", "AR"], index=0 if st.session_state.lang == "EN" else 1)
 audio_enabled = st.sidebar.toggle("🔊 Enable Audio", value=True)
@@ -191,6 +240,7 @@ if new_color != st.session_state.player_color:
     st.session_state.last_move = None
     st.session_state.coach_analysis = None
     st.session_state.last_move_feedback = None
+    st.session_state.move_eval_history = []
     if st.session_state.player_color == chess.BLACK:
         ai_m = get_bot_move(st.session_state.board, st.session_state.difficulty, is_black=False)
         if ai_m:
@@ -206,23 +256,49 @@ THEMES = {
     "Neon Cyber": {"square_light": "#2a2d37", "square_dark": "#00adb5"}
 }
 
-if st.sidebar.button("🔄 Reset Game", use_container_width=True):
-    st.session_state.board = chess.Board()
-    st.session_state.last_move = None
-    st.session_state.coach_analysis = None
+# Undo Move Function
+def undo_last_turn():
+    board = st.session_state.board
+    # Undo player move and bot counter-move
+    if len(board.move_stack) >= 2:
+        board.pop()
+        board.pop()
+        if st.session_state.move_eval_history:
+            st.session_state.move_eval_history.pop()
+    elif len(board.move_stack) == 1:
+        board.pop()
+        if st.session_state.move_eval_history:
+            st.session_state.move_eval_history.pop()
+    
+    st.session_state.last_move = board.peek() if board.move_stack else None
     st.session_state.last_move_feedback = None
-    if st.session_state.player_color == chess.BLACK:
-        ai_m = get_bot_move(st.session_state.board, st.session_state.difficulty, is_black=False)
-        if ai_m:
-            st.session_state.board.push(ai_m)
-            st.session_state.last_move = ai_m
+    st.session_state.coach_analysis = None
     st.rerun()
+
+c_undo, c_reset = st.sidebar.columns(2)
+with c_undo:
+    if st.button("↩️ Undo", use_container_width=True):
+        undo_last_turn()
+
+with c_reset:
+    if st.button("🔄 Reset", use_container_width=True):
+        st.session_state.board = chess.Board()
+        st.session_state.last_move = None
+        st.session_state.coach_analysis = None
+        st.session_state.last_move_feedback = None
+        st.session_state.move_eval_history = []
+        if st.session_state.player_color == chess.BLACK:
+            ai_m = get_bot_move(st.session_state.board, st.session_state.difficulty, is_black=False)
+            if ai_m:
+                st.session_state.board.push(ai_m)
+                st.session_state.last_move = ai_m
+        st.rerun()
 
 st.sidebar.markdown("---")
 pgn_game = chess.pgn.Game.from_board(st.session_state.board)
 st.sidebar.download_button("📥 Export PGN", data=str(pgn_game), file_name="chess_match.pgn", mime="text/plain", use_container_width=True)
 
-# 6. Main Dashboard Layout
+# 7. Main Dashboard Layout
 is_ar = st.session_state.lang == "AR"
 col_board, col_dash = st.columns([1.3, 1])
 
@@ -275,9 +351,10 @@ with col_board:
                     move = chess.Move.from_uci(f"{move_uci}q")
 
                 if move in board.legal_moves:
-                    # Analyze player move quality before executing
-                    label, alert_type = analyze_move_quality(board, move, st.session_state.player_color == chess.WHITE)
-                    st.session_state.last_move_feedback = (label, alert_type)
+                    # Magnus Move Analysis
+                    cat, feedback_text, alert_type = analyze_move_quality(board, move, st.session_state.player_color == chess.WHITE)
+                    st.session_state.last_move_feedback = (feedback_text, alert_type)
+                    st.session_state.move_eval_history.append((board.san(move), cat))
 
                     sound = "capture" if board.is_capture(move) else "move"
                     board.push(move)
@@ -302,14 +379,20 @@ with col_board:
     st.progress(norm_eval, text=f"Position Score: {curr_eval/100:+.2f}")
 
 with col_dash:
-    tab_coach, tab_history = st.tabs(["🎓 " + ("المدرب" if is_ar else "Coach"), "📜 " + ("سجل الحركات" if is_ar else "History")])
+    tab_coach, tab_review, tab_history = st.tabs([
+        "👑 " + ("مدرب ماغنوس" if is_ar else "Magnus Coach"), 
+        "📊 " + ("مراجعة المباراة" if is_ar else "Post-Match Review"),
+        "📜 " + ("سجل الحركات" if is_ar else "History")
+    ])
 
     with tab_coach:
+        st.markdown('<div class="magnus-box"><b>👑 Magnus Carlsen:</b> "Show me what you can do. No excuses."</div>', unsafe_allow_html=True)
+
         if st.session_state.last_move_feedback:
             lbl, box_style = st.session_state.last_move_feedback
-            getattr(st, box_style)(f"Last Move Analysis: {lbl}")
+            getattr(st, box_style)(lbl)
 
-        if st.button("💡 " + ("طلب نصيحة" if is_ar else "Ask Coach Best Move"), use_container_width=True):
+        if st.button("💡 " + ("طلب نصيحة ماغنوس" if is_ar else "Ask Magnus Best Move"), use_container_width=True):
             if not board.is_game_over():
                 rec_is_max = (st.session_state.player_color == chess.WHITE)
                 _, rec_move = minimax(board, depth=2, alpha=-float('inf'), beta=float('inf'), is_maximizing=rec_is_max)
@@ -318,10 +401,43 @@ with col_dash:
                     st.rerun()
 
         if st.session_state.coach_analysis:
-            st.info(f"**Recommended Move:** {st.session_state.coach_analysis}")
+            st.info(f"**Magnus Suggests:** {st.session_state.coach_analysis}")
 
         if board.is_game_over():
             st.error("🏆 Game Over!")
+
+    with tab_review:
+        st.subheader("📊 Post-Match Accuracy Review")
+        eval_history = st.session_state.move_eval_history
+
+        if eval_history:
+            total_moves = len(eval_history)
+            cats = [c for _, c in eval_history]
+
+            brilliant_count = cats.count("Brilliant")
+            best_count = cats.count("Best")
+            good_count = cats.count("Good")
+            inaccuracy_count = cats.count("Inaccuracy")
+            mistake_count = cats.count("Mistake")
+            blunder_count = cats.count("Blunder")
+
+            # Simple Accuracy Score Calculation
+            quality_points = (brilliant_count * 100 + best_count * 100 + good_count * 80 + inaccuracy_count * 50 + mistake_count * 20)
+            accuracy_pct = min(100, round(quality_points / (total_moves * 100) * 100, 1))
+
+            st.metric("Estimated Player Accuracy", f"{accuracy_pct}%")
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.write(f"💎 **Brilliant:** {brilliant_count}")
+                st.write(f"⭐ **Best:** {best_count}")
+                st.write(f"✅ **Good:** {good_count}")
+            with c2:
+                st.write(f"⚠️ **Inaccuracies:** {inaccuracy_count}")
+                st.write(f"❌ **Mistakes:** {mistake_count}")
+                st.write(f"🔴 **Blunders:** {blunder_count}")
+        else:
+            st.info("Play a few moves to generate your match analysis!")
 
     with tab_history:
         move_stack = list(board.move_stack)
