@@ -54,7 +54,7 @@ if "difficulty" not in st.session_state:
 if "lang" not in st.session_state:
     st.session_state.lang = "EN"
 if "user_elo" not in st.session_state:
-    st.session_state.user_elo = 800  # Starting ELO set to 800
+    st.session_state.user_elo = 800
 if "unlocked_badges" not in st.session_state:
     st.session_state.unlocked_badges = set()
 if "blunder_puzzles" not in st.session_state:
@@ -362,8 +362,12 @@ def check_achievements(board, move):
         if piece and piece.piece_type == chess.PAWN:
             st.session_state.unlocked_badges.add("♟️ Checkmate with a Pawn")
 
-    if board.piece_at(move.to_square) and PIECE_VALUES.get(board.piece_at(move.from_square).piece_type, 0) > PIECE_VALUES.get(board.piece_at(move.to_square).piece_type, 0):
-        st.session_state.unlocked_badges.add("⚔️ First Sacrifice")
+    from_piece = board.piece_at(move.from_square)
+    to_piece = board.piece_at(move.to_square)
+
+    if from_piece and to_piece:
+        if PIECE_VALUES.get(from_piece.piece_type, 0) > PIECE_VALUES.get(to_piece.piece_type, 0):
+            st.session_state.unlocked_badges.add("⚔️ First Sacrifice")
 
     if st.session_state.eval_score > 3.0:
         st.session_state.unlocked_badges.add("🛡️ Flawless Defense")
@@ -439,11 +443,11 @@ if st.session_state.unlocked_badges:
 
 c_undo, c_reset = st.sidebar.columns(2)
 with c_undo:
-    if st.button("↩️ Undo", use_container_width=True):
+    if st.button("↩️ Undo", width="stretch"):
         undo_last_turn()
 
 with c_reset:
-    if st.button("🔄 Reset", use_container_width=True):
+    if st.button("🔄 Reset", width="stretch"):
         st.session_state.board = chess.Board()
         st.session_state.last_move = None
         st.session_state.move_history = []
@@ -463,7 +467,7 @@ with c_reset:
 
 st.sidebar.markdown("---")
 pgn_game = chess.pgn.Game.from_board(st.session_state.board)
-st.sidebar.download_button("📥 Export PGN", data=str(pgn_game), file_name="chess_match.pgn", mime="text/plain", use_container_width=True)
+st.sidebar.download_button("📥 Export PGN", data=str(pgn_game), file_name="chess_match.pgn", mime="text/plain", width="stretch")
 
 # ==========================================
 # 8. MAIN DASHBOARD LAYOUT
@@ -534,7 +538,7 @@ with col_board:
             with c2:
                 selected_to = st.selectbox("2. " + ("اختر المربع" if is_ar else "Select Target Square"), to_square_names)
 
-            if st.button("🚀 " + ("تحريك القطعة" if is_ar else "Play Move"), use_container_width=True):
+            if st.button("🚀 " + ("تحريك القطعة" if is_ar else "Play Move"), width="stretch"):
                 move_uci = f"{selected_from}{selected_to}"
                 move = chess.Move.from_uci(move_uci)
                 if move not in board.legal_moves:
@@ -607,7 +611,7 @@ with col_dash:
         if st.session_state.last_explanation:
             st.warning(f"**Tactical Warning:** {st.session_state.last_explanation}")
 
-        if st.button("💡 " + ("طلب نصيحة" if is_ar else "Ask Coach Suggestion"), use_container_width=True):
+        if st.button("💡 " + ("طلب نصيحة" if is_ar else "Ask Coach Suggestion"), width="stretch"):
             if not board.is_game_over():
                 rec_is_max = (st.session_state.player_color == chess.WHITE)
                 _, rec_move = minimax(board, depth=2, alpha=-10000, beta=10000, maximizing=rec_is_max)
@@ -688,4 +692,4 @@ with col_dash:
                     "White": san_moves[i],
                     "Black": san_moves[i+1] if i+1 < len(san_moves) else ""
                 })
-            st.dataframe(table, use_container_width=True, hide_index=True)
+            st.dataframe(table, width="stretch", hide_index=True)
