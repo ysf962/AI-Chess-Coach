@@ -2,7 +2,10 @@ import streamlit as st
 import chess
 import chess.svg
 import chess.pgn
+import chess.engine
 import random
+import requests
+import pandas as pd
 
 # ==========================================
 # 1. PAGE CONFIG & STYLES
@@ -63,6 +66,8 @@ if "game_over" not in st.session_state:
     st.session_state.game_over = False
 if "move_eval_history" not in st.session_state:
     st.session_state.move_eval_history = []
+if "eval_chart_data" not in st.session_state:
+    st.session_state.eval_chart_data = []
 
 # ==========================================
 # 3. CONSTANTS & DATA TABLES
@@ -185,20 +190,19 @@ def play_sound(sound_type, enabled):
         )
 
 # ==========================================
-# 5. ENGINE & EVALUATION FUNCTIONS
+# 5. ENGINES & EVALUATION
 # ==========================================
-def get_captured(board):
-    w_cap, b_cap = [], []
-    for p_type, count in STARTING_PIECES.items():
-        b_took = count - len(board.pieces(p_type, chess.WHITE))
-        for _ in range(b_took):
-            b_cap.append(PIECE_SYMBOLS[(p_type, chess.WHITE)])
-        w_took = count - len(board.pieces(p_type, chess.BLACK))
-        for _ in range(w_took):
-            w_cap.append(PIECE_SYMBOLS[(p_type, chess.BLACK)])
-    return {"white": "".join(w_cap), "black": "".join(b_cap)}
+@st.cache_resource
+def get_stockfish():
+    paths = ["/usr/games/stockfish", "/usr/bin/stockfish", "stockfish"]
+    for p in paths:
+        try:
+            return chess.engine.SimpleEngine.popen_uci(p)
+        except Exception:
+            continue
+    return None
 
-def evaluate_board(board):
+def evaluate_board_custom(board):
     if board.is_checkmate():
         return -9999 if board.turn == chess.WHITE else 9999
     if board.is_stalemate() or board.is_insufficient_material():
@@ -219,9 +223,23 @@ def evaluate_board(board):
             score += total if piece.color == chess.WHITE else -total
     return score / 100.0
 
+def evaluate_position(board):
+    engine = get_stockfish()
+    if engine:
+        try:
+            info = engine.analyse(board, chess.engine.Limit(time=0.1, depth=10))
+            score = info["score"].relative.score(mate_score=10000)
+            pv = info.get("pv", [])
+            best_move = pv[0] if pv else None
+            cp = score / 100.0 if score is not None else 0.0
+            return best_move, cp
+        except Exception:
+            pass
+    return None, evaluate_board_custom(board)
+
 def minimax(board, depth, alpha, beta, maximizing):
     if depth == 0 or board.is_game_over():
-        return evaluate_board(board), None
+        return evaluate_board_custom(board), None
 
     best_move = None
     legal_moves = list(board.legal_moves)
@@ -254,11 +272,21 @@ def minimax(board, depth, alpha, beta, maximizing):
         return min_eval, best_move
 
 def get_bot_move(board, difficulty):
+    engine = get_stockfish()
+    depth_map = {"Easy": 1, "Medium": 4, "Hard": 8, "Grandmaster": 12}
+    if engine:
+        try:
+            info = engine.analyse(board, chess.engine.Limit(depth=depth_map.get(difficulty, 4)))
+            pv = info.get("pv", [])
+            if pv:
+                return pv[0]
+        except Exception:
+            pass
+
+    is_max = (board.turn == chess.WHITE)
     legal_moves = list(board.legal_moves)
     if not legal_moves:
         return None
-
-    is_max = (board.turn == chess.WHITE)
 
     if difficulty == "Easy":
         if random.random() < 0.8:
@@ -271,9 +299,20 @@ def get_bot_move(board, difficulty):
     elif difficulty == "Hard":
         _, move = minimax(board, depth=3, alpha=-10000, beta=10000, maximizing=is_max)
         return move or random.choice(legal_moves)
-    elif difficulty == "Grandmaster":
+    else:
         _, move = minimax(board, depth=4, alpha=-10000, beta=10000, maximizing=is_max)
         return move or random.choice(legal_moves)
+
+def get_captured(board):
+    w_cap, b_cap = [], []
+    for p_type, count in STARTING_PIECES.items():
+        b_took = count - len(board.pieces(p_type, chess.WHITE))
+        for _ in range(b_took):
+            b_cap.append(PIECE_SYMBOLS[(p_type, chess.WHITE)])
+        w_took = count - len(board.pieces(p_type, chess.BLACK))
+        for _ in range(w_took):
+            w_cap.append(PIECE_SYMBOLS[(p_type, chess.BLACK)])
+    return {"white": "".join(w_cap), "black": "".join(b_cap)}
 
 # ==========================================
 # 6. OVERLAYS, ANALYSIS & BADGES
@@ -317,11 +356,11 @@ def analyze_blunder(board_before, move, board_after):
     return " ".join(reasons)
 
 def analyze_move_quality(board_before, move, is_white_player):
-    eval_before = evaluate_board(board_before)
+    eval_before = evaluate_board_custom(board_before)
     _, best_move = minimax(board_before, depth=2, alpha=-10000, beta=10000, maximizing=is_white_player)
     
     board_before.push(move)
-    eval_after = evaluate_board(board_before)
+    eval_after = evaluate_board_custom(board_before)
     board_before.pop()
 
     score_change = (eval_after - eval_before) if is_white_player else (eval_before - eval_after)
@@ -372,6 +411,19 @@ def check_achievements(board, move):
     if st.session_state.eval_score > 3.0:
         st.session_state.unlocked_badges.add("🛡️ Flawless Defense")
 
+def fetch_lichess_opening(fen):
+    try:
+        res = requests.get(f"https://explorer.lichess.ovh/masters?fen={fen}", timeout=2)
+        if res.status_code == 200:
+            data = res.json()
+            opening = data.get("opening", {})
+            name = opening.get("name", "Unknown Position")
+            moves = data.get("moves", [])
+            return name, moves
+    except Exception:
+        pass
+    return None, []
+
 def undo_last_turn():
     board = st.session_state.board
     if len(board.move_stack) >= 2:
@@ -379,10 +431,16 @@ def undo_last_turn():
         board.pop()
         if st.session_state.move_eval_history:
             st.session_state.move_eval_history.pop()
+            st.session_state.move_eval_history.pop()
+        if st.session_state.eval_chart_data:
+            st.session_state.eval_chart_data.pop()
+            st.session_state.eval_chart_data.pop()
     elif len(board.move_stack) == 1:
         board.pop()
         if st.session_state.move_eval_history:
             st.session_state.move_eval_history.pop()
+        if st.session_state.eval_chart_data:
+            st.session_state.eval_chart_data.pop()
     
     st.session_state.last_move = board.peek() if board.move_stack else None
     st.session_state.last_move_feedback = None
@@ -416,6 +474,7 @@ if new_color != st.session_state.player_color:
     st.session_state.coach_analysis = None
     st.session_state.last_move_feedback = None
     st.session_state.move_eval_history = []
+    st.session_state.eval_chart_data = []
     st.session_state.game_over = False
     if st.session_state.player_color == chess.BLACK:
         ai_m = get_bot_move(st.session_state.board, st.session_state.difficulty)
@@ -456,6 +515,7 @@ with c_reset:
         st.session_state.last_move_feedback = None
         st.session_state.last_explanation = ""
         st.session_state.move_eval_history = []
+        st.session_state.eval_chart_data = []
         st.session_state.game_over = False
         if st.session_state.player_color == chess.BLACK:
             ai_m = get_bot_move(st.session_state.board, st.session_state.difficulty)
@@ -548,7 +608,6 @@ with col_board:
                     pre_board = board.copy()
                     pre_eval = st.session_state.eval_score
 
-                    # Quality Check
                     cat, feedback_text, alert_type = analyze_move_quality(board, move, st.session_state.player_color == chess.WHITE)
                     st.session_state.last_move_feedback = (feedback_text, alert_type)
                     st.session_state.move_eval_history.append((board.san(move), cat))
@@ -558,31 +617,31 @@ with col_board:
                     st.session_state.last_move = move
                     st.session_state.move_history.append(move)
 
-                    post_eval = evaluate_board(board)
+                    _, post_eval = evaluate_position(board)
                     st.session_state.eval_score = post_eval
+                    st.session_state.eval_chart_data.append(post_eval)
                     check_achievements(board, move)
                     play_sound(sound, audio_enabled)
 
-                    # Blunder Analysis
                     if (pre_eval - post_eval) > 1.5 if st.session_state.player_color == chess.WHITE else (post_eval - pre_eval) > 1.5:
                         explanation = analyze_blunder(pre_board, move, board)
                         st.session_state.last_explanation = explanation
                         st.session_state.blunder_puzzles.append((pre_board.fen(), move))
 
-                    # Check Game End
                     if board.is_game_over():
                         st.session_state.game_over = True
                         play_sound("game_over", audio_enabled)
                         if board.is_checkmate():
                             update_elo(True, st.session_state.difficulty)
                     else:
-                        # Bot Response
                         bot_move = get_bot_move(board, st.session_state.difficulty)
                         if bot_move:
                             board.push(bot_move)
                             st.session_state.last_move = bot_move
                             st.session_state.move_history.append(bot_move)
-                            st.session_state.eval_score = evaluate_board(board)
+                            _, bot_eval = evaluate_position(board)
+                            st.session_state.eval_score = bot_eval
+                            st.session_state.eval_chart_data.append(bot_eval)
 
                             if board.is_game_over():
                                 st.session_state.game_over = True
@@ -613,8 +672,11 @@ with col_dash:
 
         if st.button("💡 " + ("طلب نصيحة" if is_ar else "Ask Coach Suggestion"), width="stretch"):
             if not board.is_game_over():
-                rec_is_max = (st.session_state.player_color == chess.WHITE)
-                _, rec_move = minimax(board, depth=2, alpha=-10000, beta=10000, maximizing=rec_is_max)
+                rec_move, _ = evaluate_position(board)
+                if not rec_move:
+                    rec_is_max = (st.session_state.player_color == chess.WHITE)
+                    _, rec_move = minimax(board, depth=2, alpha=-10000, beta=10000, maximizing=rec_is_max)
+                
                 if rec_move:
                     st.session_state.coach_analysis = board.san(rec_move)
                     st.rerun()
@@ -658,10 +720,19 @@ with col_dash:
             st.info("Play a few moves to generate match analysis!")
 
         st.markdown("---")
+        st.subheader("📈 Evaluation Graph")
+        if st.session_state.eval_chart_data:
+            chart_df = pd.DataFrame({
+                "Move": list(range(1, len(st.session_state.eval_chart_data) + 1)),
+                "Evaluation": st.session_state.eval_chart_data
+            })
+            st.line_chart(chart_df.set_index("Move"))
+
+        st.markdown("---")
         st.subheader("🧩 Blunder Puzzles")
         if st.session_state.blunder_puzzles:
             st.write(f"**{len(st.session_state.blunder_puzzles)}** saved blunder puzzle(s).")
-            if st.button("Replay Last Blunder Position"):
+            if st.button("Replay Last Blunder Position", width="stretch"):
                 fen, bad_move = st.session_state.blunder_puzzles[-1]
                 st.session_state.board = chess.Board(fen)
                 st.session_state.game_over = False
@@ -675,7 +746,18 @@ with col_dash:
         for prefix, name in OPENINGS_DB.items():
             if move_uci_str.startswith(prefix):
                 opening_name = name
-        st.info(f"**Identified Opening:** {opening_name}")
+
+        lichess_name, master_moves = fetch_lichess_opening(board.fen())
+        final_opening = lichess_name if lichess_name else opening_name
+        st.info(f"**Identified Opening:** {final_opening}")
+
+        if master_moves:
+            st.markdown("**Top Master Moves in this Position:**")
+            move_df = pd.DataFrame([
+                {"Move": m["san"], "White Wins": m["white"], "Draws": m["draws"], "Black Wins": m["black"]}
+                for m in master_moves[:5]
+            ])
+            st.dataframe(move_df, width="stretch", hide_index=True)
 
     with tab_history:
         move_stack = list(board.move_stack)
