@@ -10,7 +10,7 @@ import pandas as pd
 # ==========================================
 # 1. PAGE CONFIG & STYLES
 # ==========================================
-st.set_page_config(page_title="AI Chess Coach", layout="wide", page_icon="♟️")
+st.set_page_config(page_title="AI Chess Coach Pro", layout="wide", page_icon="♟️")
 
 st.markdown("""
     <style>
@@ -298,7 +298,6 @@ def get_bot_move(board, difficulty):
         except Exception:
             pass
 
-    # Fallback to Minimax search with blunders matching target ELOs
     is_max = (board.turn == chess.WHITE)
     legal_moves = list(board.legal_moves)
     if not legal_moves:
@@ -430,28 +429,31 @@ def fetch_lichess_opening(fen):
         pass
     return None, []
 
+# SAFE UNDO TURN IMPLEMENTATION
 def undo_last_turn():
     board = st.session_state.board
-    if len(board.move_stack) >= 2:
-        board.pop()
-        board.pop()
-        if st.session_state.move_eval_history:
-            st.session_state.move_eval_history.pop()
-            st.session_state.move_eval_history.pop()
-        if st.session_state.eval_chart_data:
-            st.session_state.eval_chart_data.pop()
-            st.session_state.eval_chart_data.pop()
-    elif len(board.move_stack) == 1:
-        board.pop()
-        if st.session_state.move_eval_history:
-            st.session_state.move_eval_history.pop()
-        if st.session_state.eval_chart_data:
-            st.session_state.eval_chart_data.pop()
     
+    # Determine how many moves to undo based on move stack
+    moves_to_undo = 0
+    if len(board.move_stack) >= 2:
+        moves_to_undo = 2
+    elif len(board.move_stack) == 1:
+        moves_to_undo = 1
+
+    for _ in range(moves_to_undo):
+        board.pop()
+        if st.session_state.move_history:
+            st.session_state.move_history.pop()
+        if st.session_state.move_eval_history:
+            st.session_state.move_eval_history.pop()
+        if st.session_state.eval_chart_data:
+            st.session_state.eval_chart_data.pop()
+
     st.session_state.last_move = board.peek() if board.move_stack else None
     st.session_state.last_move_feedback = None
     st.session_state.coach_analysis = None
     st.session_state.last_explanation = ""
+    st.session_state.game_over = False
     st.rerun()
 
 # ==========================================
