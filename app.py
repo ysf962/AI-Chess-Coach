@@ -159,6 +159,13 @@ THEMES = {
     "Neon Cyber": {"square_light": "#2a2d37", "square_dark": "#00adb5"}
 }
 
+BOT_CONFIGS = {
+    "Easy": {"elo": 400, "depth": 1, "skill_level": 0, "time_limit": 0.05, "random_chance": 0.60},
+    "Medium": {"elo": 800, "depth": 3, "skill_level": 3, "time_limit": 0.1, "random_chance": 0.20},
+    "Hard": {"elo": 1200, "depth": 6, "skill_level": 8, "time_limit": 0.2, "random_chance": 0.05},
+    "Grandmaster": {"elo": 1750, "depth": 12, "skill_level": 14, "time_limit": 0.4, "random_chance": 0.0}
+}
+
 # ==========================================
 # 4. AUDIO CONTROLLER
 # ==========================================
@@ -272,36 +279,36 @@ def minimax(board, depth, alpha, beta, maximizing):
         return min_eval, best_move
 
 def get_bot_move(board, difficulty):
+    config = BOT_CONFIGS.get(difficulty, BOT_CONFIGS["Medium"])
     engine = get_stockfish()
-    depth_map = {"Easy": 1, "Medium": 4, "Hard": 8, "Grandmaster": 12}
+
     if engine:
         try:
-            info = engine.analyse(board, chess.engine.Limit(depth=depth_map.get(difficulty, 4)))
+            engine.configure({
+                "UCI_LimitStrength": True,
+                "UCI_Elo": config["elo"]
+            })
+            info = engine.analyse(
+                board, 
+                chess.engine.Limit(time=config["time_limit"], depth=config["depth"])
+            )
             pv = info.get("pv", [])
             if pv:
                 return pv[0]
         except Exception:
             pass
 
+    # Fallback to Minimax search with blunders matching target ELOs
     is_max = (board.turn == chess.WHITE)
     legal_moves = list(board.legal_moves)
     if not legal_moves:
         return None
 
-    if difficulty == "Easy":
-        if random.random() < 0.8:
-            return random.choice(legal_moves)
-        _, move = minimax(board, depth=1, alpha=-10000, beta=10000, maximizing=is_max)
-        return move or random.choice(legal_moves)
-    elif difficulty == "Medium":
-        _, move = minimax(board, depth=2, alpha=-10000, beta=10000, maximizing=is_max)
-        return move or random.choice(legal_moves)
-    elif difficulty == "Hard":
-        _, move = minimax(board, depth=3, alpha=-10000, beta=10000, maximizing=is_max)
-        return move or random.choice(legal_moves)
-    else:
-        _, move = minimax(board, depth=4, alpha=-10000, beta=10000, maximizing=is_max)
-        return move or random.choice(legal_moves)
+    if random.random() < config["random_chance"]:
+        return random.choice(legal_moves)
+
+    _, move = minimax(board, depth=min(config["depth"], 4), alpha=-10000, beta=10000, maximizing=is_max)
+    return move or random.choice(legal_moves)
 
 def get_captured(board):
     w_cap, b_cap = [], []
@@ -389,8 +396,7 @@ def analyze_move_quality(board_before, move, is_white_player):
     return cat, f"**{cat} Move!** — *\"{quote}\"*", alert
 
 def update_elo(user_won, difficulty):
-    diff_ratings = {"Easy": 800, "Medium": 1200, "Hard": 1600, "Grandmaster": 2200}
-    bot_elo = diff_ratings.get(difficulty, 1200)
+    bot_elo = BOT_CONFIGS.get(difficulty, BOT_CONFIGS["Medium"])["elo"]
     expected = 1 / (1 + 10 ** ((bot_elo - st.session_state.user_elo) / 400))
     actual = 1.0 if user_won else 0.0
     st.session_state.user_elo += int(32 * (actual - expected))
@@ -543,7 +549,8 @@ with col_board:
     top_captures = mat['white'] if st.session_state.player_color == chess.BLACK else mat['black']
     bottom_captures = mat['black'] if st.session_state.player_color == chess.BLACK else mat['white']
 
-    st.markdown(f"**🤖 Bot ({st.session_state.difficulty}):** {top_captures}")
+    bot_elo_display = BOT_CONFIGS.get(st.session_state.difficulty, BOT_CONFIGS["Medium"])["elo"]
+    st.markdown(f"**🤖 Bot ({st.session_state.difficulty} - {bot_elo_display} ELO):** {top_captures}")
 
     theme_colors = THEMES[theme_choice]
     fill_colors = get_threat_and_guard_fill(board) if show_threats else {}
