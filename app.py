@@ -10,7 +10,7 @@ import pandas as pd
 # ==========================================
 # 1. PAGE CONFIG & STYLES
 # ==========================================
-st.set_page_config(page_title="The Chess Coach", layout="wide", page_icon="♟️")
+st.set_page_config(page_title="AI Chess Coach Pro", layout="wide", page_icon="♟️")
 
 st.markdown("""
     <style>
@@ -29,6 +29,14 @@ st.markdown("""
         padding: 15px;
         border-radius: 8px;
         margin-bottom: 15px;
+    }
+    .game-over-banner {
+        background-color: #1f242d;
+        border: 2px solid #00c853;
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
+        margin-bottom: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -58,12 +66,18 @@ if "lang" not in st.session_state:
     st.session_state.lang = "EN"
 if "user_elo" not in st.session_state:
     st.session_state.user_elo = 800
+if "games_played" not in st.session_state:
+    st.session_state.games_played = 0
 if "unlocked_badges" not in st.session_state:
     st.session_state.unlocked_badges = set()
 if "blunder_puzzles" not in st.session_state:
     st.session_state.blunder_puzzles = []
 if "game_over" not in st.session_state:
     st.session_state.game_over = False
+if "game_result_reason" not in st.session_state:
+    st.session_state.game_result_reason = ""
+if "elo_change_msg" not in st.session_state:
+    st.session_state.elo_change_msg = ""
 if "move_eval_history" not in st.session_state:
     st.session_state.move_eval_history = []
 if "eval_chart_data" not in st.session_state:
@@ -321,7 +335,7 @@ def get_captured(board):
     return {"white": "".join(w_cap), "black": "".join(b_cap)}
 
 # ==========================================
-# 6. OVERLAYS, ANALYSIS & BADGES
+# 6. OVERLAYS, ANALYSIS & CHESS.COM ELO SYSTEM
 # ==========================================
 def get_threat_and_guard_fill(board):
     fill_dict = {}
@@ -394,11 +408,55 @@ def analyze_move_quality(board_before, move, is_white_player):
     quote = random.choice(COACH_QUOTES[cat])
     return cat, f"**{cat} Move!** — *\"{quote}\"*", alert
 
-def update_elo(user_won, difficulty):
+def update_chess_com_elo(result_score, difficulty):
+    """
+    Chess.com ELO System:
+    - Dynamic K-Factor: 40 for new accounts (<30 games), 20 for standard play.
+    - Result Score: 1.0 (Win), 0.5 (Draw), 0.0 (Loss)
+    """
+    st.session_state.games_played += 1
     bot_elo = BOT_CONFIGS.get(difficulty, BOT_CONFIGS["Medium"])["elo"]
-    expected = 1 / (1 + 10 ** ((bot_elo - st.session_state.user_elo) / 400))
-    actual = 1.0 if user_won else 0.0
-    st.session_state.user_elo += int(32 * (actual - expected))
+    user_elo = st.session_state.user_elo
+
+    # Determine K-factor based on Chess.com placement scaling
+    if st.session_state.games_played <= 30:
+        k_factor = 40
+    else:
+        k_factor = 20
+
+    # Calculate expected win probability
+    expected = 1 / (1 + 10 ** ((bot_elo - user_elo) / 400))
+    elo_delta = int(k_factor * (result_score - expected))
+    st.session_state.user_elo += elo_delta
+
+    sign = "+" if elo_delta >= 0 else ""
+    st.session_state.elo_change_msg = f"Rating Adjustment: **{sign}{elo_delta} ELO** (New Rating: **{st.session_state.user_elo}**)"
+
+def handle_game_end(board, winner_side=None):
+    st.session_state.game_over = True
+    
+    if board.is_checkmate():
+        if winner_side == st.session_state.player_color:
+            st.session_state.game_result_reason = "🎉 **Checkmate! You Won!**"
+            update_chess_com_elo(1.0, st.session_state.difficulty)
+        else:
+            st.session_state.game_result_reason = "💀 **Checkmate! Bot Won.**"
+            update_chess_com_elo(0.0, st.session_state.difficulty)
+    elif board.is_stalemate():
+        st.session_state.game_result_reason = "🤝 **Draw by Stalemate!**"
+        update_chess_com_elo(0.5, st.session_state.difficulty)
+    elif board.is_insufficient_material():
+        st.session_state.game_result_reason = "🤝 **Draw by Insufficient Material!**"
+        update_chess_com_elo(0.5, st.session_state.difficulty)
+    elif board.is_fivefold_repetition() or board.is_threefold_repetition():
+        st.session_state.game_result_reason = "🤝 **Draw by Repetition!**"
+        update_chess_com_elo(0.5, st.session_state.difficulty)
+    elif board.is_seventyfive_moves() or board.can_claim_fifty_moves():
+        st.session_state.game_result_reason = "🤝 **Draw by 50-Move Rule!**"
+        update_chess_com_elo(0.5, st.session_state.difficulty)
+    else:
+        st.session_state.game_result_reason = "🏁 **Game Drawn!**"
+        update_chess_com_elo(0.5, st.session_state.difficulty)
 
 def check_achievements(board, move):
     if board.is_checkmate():
@@ -429,16 +487,9 @@ def fetch_lichess_opening(fen):
         pass
     return None, []
 
-# SAFE UNDO TURN IMPLEMENTATION
 def undo_last_turn():
     board = st.session_state.board
-    
-    # Determine how many moves to undo based on move stack
-    moves_to_undo = 0
-    if len(board.move_stack) >= 2:
-        moves_to_undo = 2
-    elif len(board.move_stack) == 1:
-        moves_to_undo = 1
+    moves_to_undo = 2 if len(board.move_stack) >= 2 else (1 if len(board.move_stack) == 1 else 0)
 
     for _ in range(moves_to_undo):
         board.pop()
@@ -454,6 +505,8 @@ def undo_last_turn():
     st.session_state.coach_analysis = None
     st.session_state.last_explanation = ""
     st.session_state.game_over = False
+    st.session_state.game_result_reason = ""
+    st.session_state.elo_change_msg = ""
     st.rerun()
 
 # ==========================================
@@ -484,6 +537,8 @@ if new_color != st.session_state.player_color:
     st.session_state.move_eval_history = []
     st.session_state.eval_chart_data = []
     st.session_state.game_over = False
+    st.session_state.game_result_reason = ""
+    st.session_state.elo_change_msg = ""
     if st.session_state.player_color == chess.BLACK:
         ai_m = get_bot_move(st.session_state.board, st.session_state.difficulty)
         if ai_m:
@@ -502,6 +557,7 @@ show_eval_bar = st.sidebar.checkbox("Live Evaluation Bar", value=True)
 st.sidebar.markdown("---")
 st.sidebar.subheader("🏆 Player Stats")
 st.sidebar.metric("Your Rating (ELO)", st.session_state.user_elo)
+st.sidebar.caption(f"Games Played: {st.session_state.games_played}")
 
 if st.session_state.unlocked_badges:
     st.sidebar.markdown("**Badges Unlocked:**")
@@ -525,6 +581,8 @@ with c_reset:
         st.session_state.move_eval_history = []
         st.session_state.eval_chart_data = []
         st.session_state.game_over = False
+        st.session_state.game_result_reason = ""
+        st.session_state.elo_change_msg = ""
         if st.session_state.player_color == chess.BLACK:
             ai_m = get_bot_move(st.session_state.board, st.session_state.difficulty)
             if ai_m:
@@ -541,6 +599,18 @@ st.sidebar.download_button("📥 Export PGN", data=str(pgn_game), file_name="che
 # 8. MAIN DASHBOARD LAYOUT
 # ==========================================
 is_ar = st.session_state.lang == "AR"
+
+# GAME OVER END-SCREEN BANNER
+if st.session_state.game_over:
+    st.markdown(
+        f"""
+        <div class="game-over-banner">
+            <h2>{st.session_state.game_result_reason}</h2>
+            <p>{st.session_state.elo_change_msg}</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 col_board, col_dash = st.columns([1.3, 1])
 board = st.session_state.board
@@ -638,10 +708,8 @@ with col_board:
                         st.session_state.blunder_puzzles.append((pre_board.fen(), move))
 
                     if board.is_game_over():
-                        st.session_state.game_over = True
                         play_sound("game_over", audio_enabled)
-                        if board.is_checkmate():
-                            update_elo(True, st.session_state.difficulty)
+                        handle_game_end(board, winner_side=st.session_state.player_color)
                     else:
                         bot_move = get_bot_move(board, st.session_state.difficulty)
                         if bot_move:
@@ -653,51 +721,24 @@ with col_board:
                             st.session_state.eval_chart_data.append(bot_eval)
 
                             if board.is_game_over():
-                                st.session_state.game_over = True
                                 play_sound("game_over", audio_enabled)
-                                if board.is_checkmate():
-                                    update_elo(False, st.session_state.difficulty)
+                                bot_side = chess.BLACK if st.session_state.player_color == chess.WHITE else chess.WHITE
+                                handle_game_end(board, winner_side=bot_side)
 
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
 with col_dash:
-    tab_coach, tab_review, tab_opening, tab_history = st.tabs([
+    tab_review, tab_puzzles, tab_coach, tab_opening, tab_history = st.tabs([
+        "📊 " + ("المراجعة" if is_ar else "Review / Analysis"),
+        "🧩 " + ("الألغاز" if is_ar else "Blunder Puzzles"),
         "👑 " + ("المدرب" if is_ar else "Coach"), 
-        "📊 " + ("المراجعة" if is_ar else "Review"),
         "📖 " + ("الافتتاحية" if is_ar else "Opening"),
         "📜 " + ("السجل" if is_ar else "History")
     ])
 
-    with tab_coach:
-        st.markdown(f'<div class="coach-box"><b>👑 {coach_persona}:</b> "Focus on position control and structure."</div>', unsafe_allow_html=True)
-
-        if st.session_state.last_move_feedback:
-            lbl, box_style = st.session_state.last_move_feedback
-            getattr(st, box_style)(lbl)
-
-        if st.session_state.last_explanation:
-            st.warning(f"**Tactical Warning:** {st.session_state.last_explanation}")
-
-        if st.button("💡 " + ("طلب نصيحة" if is_ar else "Ask Coach Suggestion"), width="stretch"):
-            if not board.is_game_over():
-                rec_move, _ = evaluate_position(board)
-                if not rec_move:
-                    rec_is_max = (st.session_state.player_color == chess.WHITE)
-                    _, rec_move = minimax(board, depth=2, alpha=-10000, beta=10000, maximizing=rec_is_max)
-                
-                if rec_move:
-                    st.session_state.coach_analysis = board.san(rec_move)
-                    st.rerun()
-
-        if st.session_state.coach_analysis:
-            st.info(f"**Recommended Move:** {st.session_state.coach_analysis}")
-
-        if board.is_game_over():
-            st.error("🏆 Game Over!")
-
     with tab_review:
-        st.subheader("📊 Post-Match Review")
+        st.subheader("📊 Post-Match & Live Analysis")
         eval_history = st.session_state.move_eval_history
 
         if eval_history:
@@ -726,7 +767,7 @@ with col_dash:
                 st.write(f"❌ **Mistakes:** {mistake_count}")
                 st.write(f"🔴 **Blunders:** {blunder_count}")
         else:
-            st.info("Play a few moves to generate match analysis!")
+            st.info("Play a few moves to see real-time match analysis!")
 
         st.markdown("---")
         st.subheader("📈 Evaluation Graph")
@@ -736,17 +777,45 @@ with col_dash:
                 "Evaluation": st.session_state.eval_chart_data
             })
             st.line_chart(chart_df.set_index("Move"))
+        else:
+            st.caption("No move evaluation data yet.")
 
-        st.markdown("---")
-        st.subheader("🧩 Blunder Puzzles")
+    with tab_puzzles:
+        st.subheader("🧩 Generated Blunder Puzzles")
         if st.session_state.blunder_puzzles:
-            st.write(f"**{len(st.session_state.blunder_puzzles)}** saved blunder puzzle(s).")
+            st.write(f"You have **{len(st.session_state.blunder_puzzles)}** saved blunder puzzle(s) from your mistakes.")
             if st.button("Replay Last Blunder Position", width="stretch"):
                 fen, bad_move = st.session_state.blunder_puzzles[-1]
                 st.session_state.board = chess.Board(fen)
                 st.session_state.game_over = False
                 st.session_state.last_explanation = ""
                 st.rerun()
+        else:
+            st.info("No blunders detected yet! Puzzles are automatically generated whenever you make a tactical blunder during a game.")
+
+    with tab_coach:
+        st.markdown(f'<div class="coach-box"><b>👑 {coach_persona}:</b> "Focus on position control and structure."</div>', unsafe_allow_html=True)
+
+        if st.session_state.last_move_feedback:
+            lbl, box_style = st.session_state.last_move_feedback
+            getattr(st, box_style)(lbl)
+
+        if st.session_state.last_explanation:
+            st.warning(f"**Tactical Warning:** {st.session_state.last_explanation}")
+
+        if st.button("💡 " + ("طلب نصيحة" if is_ar else "Ask Coach Suggestion"), width="stretch"):
+            if not board.is_game_over():
+                rec_move, _ = evaluate_position(board)
+                if not rec_move:
+                    rec_is_max = (st.session_state.player_color == chess.WHITE)
+                    _, rec_move = minimax(board, depth=2, alpha=-10000, beta=10000, maximizing=rec_is_max)
+                
+                if rec_move:
+                    st.session_state.coach_analysis = board.san(rec_move)
+                    st.rerun()
+
+        if st.session_state.coach_analysis:
+            st.info(f"**Recommended Move:** {st.session_state.coach_analysis}")
 
     with tab_opening:
         st.subheader("📖 Opening Explorer")
