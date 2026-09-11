@@ -10,7 +10,7 @@ import pandas as pd
 # ==========================================
 # 1. PAGE CONFIG & STYLES
 # ==========================================
-st.set_page_config(page_title="AI Chess Coach Pro", layout="wide", page_icon="♟️")
+st.set_page_config(page_title="AI Chess Coach", layout="wide", page_icon="♟️")
 
 st.markdown("""
     <style>
