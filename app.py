@@ -6,7 +6,12 @@ Needs:    streamlit>=1.50, python-chess, pandas, requests
 Optional: Stockfish (apt: `stockfish`, or set STOCKFISH_PATH) for a much stronger
           bot and far better move ratings. Without it the app uses a built-in
           engine. Optional LICHESS_TOKEN (env or st.secrets) for the opening explorer.
+
+Rating, win/loss record and badges persist between sessions in a small JSON file
+next to this script (chess_coach_profile.json), or wherever CHESS_COACH_PROFILE
+points. Delete that file, or use "Reset rating" in the sidebar, to start over.
 """
+import json
 import math
 import os
 import random
@@ -14,6 +19,8 @@ import shutil
 import threading
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import chess
 import chess.engine
@@ -246,6 +253,8 @@ TR = {
     "games": ("Games played", "المباريات"),
     "record": ("Record (W/D/L)", "السجل (فوز/تعادل/خسارة)"),
     "badges": ("Badges Unlocked", "الأوسمة المكتسبة"),
+    "reset_rating": ("Reset rating", "إعادة تعيين التصنيف"),
+    "reset_rating_confirm": ("Yes, erase my saved rating and badges", "نعم، امسح تصنيفي وأوسمتي المحفوظة"),
     "new_game": ("New Game", "مباراة جديدة"),
     "undo": ("Undo", "تراجع"),
     "undo_help": ("Using undo makes the game unrated.", "استخدام التراجع يجعل المباراة غير مصنّفة."),
@@ -333,7 +342,49 @@ def tr_term(name):
 
 
 # ==========================================
-# 2. SESSION STATE
+# 2. PERSISTENT PROFILE (rating, record, badges — survive across sessions/restarts)
+# ==========================================
+DEFAULT_PROFILE = {"user_elo": 800, "games_played": 0, "record": {"W": 0, "D": 0, "L": 0}, "badges": []}
+PROFILE_PATH = Path(os.environ.get("CHESS_COACH_PROFILE", "")) if os.environ.get("CHESS_COACH_PROFILE") \
+    else Path(__file__).resolve().with_name("chess_coach_profile.json")
+_profile_lock = threading.Lock()
+
+
+def load_profile():
+    try:
+        data = json.loads(PROFILE_PATH.read_text())
+        return {**DEFAULT_PROFILE, **data}
+    except Exception:
+        return dict(DEFAULT_PROFILE)
+
+
+def save_profile():
+    """Best-effort, atomic write so a crash mid-write can't corrupt the file."""
+    ss = st.session_state
+    data = {
+        "user_elo": ss.user_elo, "games_played": ss.games_played,
+        "record": ss.record, "badges": sorted(ss.badges),
+    }
+    try:
+        with _profile_lock:
+            tmp = PROFILE_PATH.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data))
+            tmp.replace(PROFILE_PATH)
+    except Exception:
+        pass  # persistence is a nice-to-have; never break gameplay over it
+
+
+def reset_profile():
+    ss = st.session_state
+    ss.user_elo = DEFAULT_PROFILE["user_elo"]
+    ss.games_played = DEFAULT_PROFILE["games_played"]
+    ss.record = dict(DEFAULT_PROFILE["record"])
+    ss.badges = set()
+    save_profile()
+
+
+# ==========================================
+# 3. SESSION STATE
 # ==========================================
 def init_state():
     ss = st.session_state
@@ -341,10 +392,12 @@ def init_state():
     ss.setdefault("log", [])                # one record per ply (see apply_move)
     ss.setdefault("player_color", chess.WHITE)
     ss.setdefault("game_difficulty", "Medium")
-    ss.setdefault("user_elo", 800)
-    ss.setdefault("games_played", 0)
-    ss.setdefault("record", {"W": 0, "D": 0, "L": 0})
-    ss.setdefault("badges", set())
+    if "user_elo" not in ss:                # first run of this browser session: load from disk
+        profile = load_profile()
+        ss.user_elo = profile["user_elo"]
+        ss.games_played = profile["games_played"]
+        ss.record = profile["record"]
+        ss.badges = set(profile["badges"])
     ss.setdefault("puzzles", [])
     ss.setdefault("puzzle", None)
     ss.setdefault("puzzle_board", None)
@@ -365,7 +418,7 @@ def init_state():
 
 
 # ==========================================
-# 3. ENGINES & EVALUATION
+# 4. ENGINES & EVALUATION
 # ==========================================
 def find_stockfish():
     candidates = [
@@ -531,7 +584,7 @@ def get_bot_move(board, difficulty):
 
 
 # ==========================================
-# 4. MOVE ASSESSMENT & COACHING
+# 5. MOVE ASSESSMENT & COACHING
 # ==========================================
 def win_pct(cp):
     """White's winning chances (0-100) for an evaluation in centipawns."""
@@ -583,7 +636,8 @@ def classify(loss, is_best, is_sac, mover_before, mover_after):
 
 
 def assess_move(board, move):
-    """Grade `move` (legal in `board`) against best play. The board is left unchanged."""
+    """Grade `move` (legal in `board`) against best play. Never mutates `board` — this
+    makes it safe to call from a worker thread while other code reads the same board."""
     sign = 1 if board.turn == chess.WHITE else -1
     best_uci, before_cp = get_analysis(board)
     best_san = None
@@ -594,10 +648,10 @@ def assess_move(board, move):
     san = board.san(move)
     sac = is_sacrifice(board, move)
 
-    board.push(move)
-    _, after_cp = get_analysis(board)
-    gives_mate = board.is_checkmate()
-    board.pop()
+    after_board = board.copy(stack=False)
+    after_board.push(move)
+    _, after_cp = get_analysis(after_board)
+    gives_mate = after_board.is_checkmate()
 
     is_best = move.uci() == best_uci or gives_mate
     loss = 0.0 if is_best else max(0.0, win_pct(sign * before_cp) - win_pct(sign * after_cp))
@@ -656,7 +710,7 @@ def make_feedback(rec):
 
 
 # ==========================================
-# 5. GAME FLOW (all called from button callbacks)
+# 6. GAME FLOW (all called from button callbacks)
 # ==========================================
 def queue_sound(kind):
     st.session_state.sound = kind
@@ -675,8 +729,10 @@ def apply_move(move, by_player):
     ss.log.append(rec)
     if by_player and rec["cat"] == "Brilliant":
         ss.badges.add("💎 Brilliant Move")
+        save_profile()
     if by_player and rec["gives_mate"] and rec["piece"] == chess.PAWN:
         ss.badges.add("♟️ Pawn Checkmate")
+        save_profile()
     return rec
 
 
@@ -708,6 +764,7 @@ def record_result(score):
             ss.badges.add("🔥 Comeback")
     if len(player_recs) >= 15 and all(r["cat"] not in ("Mistake", "Blunder") for r in player_recs):
         ss.badges.add("🎯 Clean Game")
+    save_profile()
 
 
 def finish_game():
@@ -728,9 +785,36 @@ def finish_game():
 
 
 def play_player_move(move):
+    """Assess the player's move and pick the bot's reply at the same time — both
+    only need to read the resulting position, so running them in parallel (on
+    separate Stockfish processes) roughly halves the wait compared to doing them
+    one after another."""
     ss = st.session_state
     board = ss.board
-    rec = apply_move(move, True)
+
+    sim_after = board.copy(stack=False)
+    sim_after.push(move)
+    bot_needed = not sim_after.is_game_over(claim_draw=True)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fut_rec = pool.submit(assess_move, board, move)
+        fut_bot = pool.submit(get_bot_move, sim_after, ss.game_difficulty) if bot_needed else None
+        rec = fut_rec.result()
+        bot_move = fut_bot.result() if fut_bot else None
+
+    rec["piece"] = board.piece_type_at(move.from_square)
+    rec["capture"] = board.is_capture(move)
+    rec["by_player"] = True
+    before = board.copy(stack=False)
+    board.push(move)
+    ss.log.append(rec)
+    if rec["cat"] == "Brilliant":
+        ss.badges.add("💎 Brilliant Move")
+        save_profile()
+    if rec["gives_mate"] and rec["piece"] == chess.PAWN:
+        ss.badges.add("♟️ Pawn Checkmate")
+        save_profile()
+
     ss.selected_sq = None
     ss.pending_promo = None
     ss.hint_uci = None
@@ -739,8 +823,6 @@ def play_player_move(move):
     ss.explanation = ""
 
     if rec["cat"] in ("Mistake", "Blunder"):
-        before = board.copy()
-        before.pop()
         ss.explanation = analyze_blunder(before, move, board, rec["best_san"])
         if rec["best_uci"] and rec["best_uci"] != rec["uci"]:
             ss.puzzles.append({
@@ -754,7 +836,6 @@ def play_player_move(move):
         finish_game()
         return
 
-    bot_move = get_bot_move(board, ss.game_difficulty)
     if bot_move:
         bot_rec = apply_move(bot_move, False)
         if bot_rec["capture"]:
@@ -882,6 +963,7 @@ def submit_puzzle_move(move):
         pz["done"] = True
         ss.puzzles[pz["idx"]]["solved"] = True
         ss.badges.add("🧩 Puzzle Solver")
+        save_profile()
         ss.puzzle_msg = ("success", "puzzle_correct")
         queue_sound("move")
     else:
@@ -945,7 +1027,7 @@ def on_promote(piece_type):
 
 
 # ==========================================
-# 6. RENDERING HELPERS
+# 7. RENDERING HELPERS
 # ==========================================
 BASE_CSS = """
 .stApp { background-color: #0e1117; }
@@ -1111,13 +1193,40 @@ def material_diff(board):
 
 
 def play_sound(kind):
-    url = SOUND_URLS.get(kind)
-    if not url:
+    """Play a sound effect. Each rerun renders this inside a brand-new, sandboxed
+    iframe, and browsers block autoplay-with-sound in a frame that hasn't itself
+    received a user gesture — the click happened in the *top* page, not in this
+    throwaway iframe, so a plain <audio autoplay> here is silently blocked. We
+    instead reach up to window.parent (the actual Streamlit page, which persists
+    across reruns and did receive the click) and keep one set of <audio> elements
+    there, created once and reused, which browsers are willing to play."""
+    if kind not in SOUND_URLS:
         return
     nonce = st.session_state.sound_nonce
+    urls_json = json.dumps(SOUND_URLS)
     components.html(
-        f"""<audio autoplay><source src="{url}" type="audio/mpeg"></audio>
-        <script>var a=document.querySelector('audio'); if(a){{a.volume=1.0; a.play().catch(function(e){{}});}}</script>
+        f"""<script>
+        (function() {{
+            try {{
+                var top = window.parent;
+                if (!top.__chessAudio) {{
+                    var urls = {urls_json};
+                    top.__chessAudio = {{}};
+                    for (var key in urls) {{
+                        var a = new Audio(urls[key]);
+                        a.preload = "auto";
+                        top.__chessAudio[key] = a;
+                    }}
+                }}
+                var snd = top.__chessAudio[{kind!r}];
+                if (snd) {{
+                    snd.currentTime = 0;
+                    snd.volume = 1.0;
+                    snd.play().catch(function() {{}});
+                }}
+            }} catch (e) {{}}
+        }})();
+        </script>
         <!-- {nonce} -->""",
         height=0,
     )
@@ -1175,7 +1284,7 @@ def local_opening_name(board):
 
 
 # ==========================================
-# 7. SIDEBAR
+# 8. SIDEBAR
 # ==========================================
 init_state()
 ss = st.session_state
@@ -1208,6 +1317,10 @@ if ss.badges:
     st.sidebar.markdown(f"**{t('badges')}:**")
     for badge in sorted(ss.badges):
         st.sidebar.caption(badge)
+with st.sidebar.expander(t("reset_rating")):
+    st.checkbox(t("reset_rating_confirm"), key="confirm_reset")
+    st.button(t("reset_rating"), key="btn_reset_rating", on_click=reset_profile,
+              disabled=not ss.get("confirm_reset"), width="stretch")
 
 st.sidebar.markdown("---")
 st.sidebar.button("🔄 " + t("new_game"), key="btn_new", on_click=new_game, width="stretch")
@@ -1217,7 +1330,7 @@ pool = get_engines()
 st.sidebar.caption("⚙️ " + (pool["name"] if pool else t("builtin_engine")))
 
 # ==========================================
-# 8. MAIN DASHBOARD
+# 9. MAIN DASHBOARD
 # ==========================================
 css = BASE_CSS
 if is_ar:
