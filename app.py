@@ -149,11 +149,19 @@ OPENINGS_DB = {
     "f2f4": "Bird's Opening",
 }
 
+# Every theme may optionally override piece coloring (otherwise plain white/black
+# pieces with a dark/light outline are used — see board_css).
 THEMES = {
     "Classic Wood": {"light": "#f0d9b5", "dark": "#b58863"},
     "Lichess Green": {"light": "#ffffdd", "dark": "#86a666"},
     "Midnight Dark": {"light": "#9e9e9e", "dark": "#424242"},
     "Neon Cyber": {"light": "#2a2d37", "dark": "#00adb5"},
+    "Old Money": {
+        "light": "#e4d9bd", "dark": "#5c4430",
+        "white_piece": "#f6ecd2", "white_shadow": "0 0 1px #2a1d10, 0 1px 2px rgba(0,0,0,.5)",
+        "black_piece": "#241a10", "black_shadow": "0 0 1px #d9c48f, 0 1px 1px rgba(0,0,0,.4)",
+        "accent": "#8a6d3b",
+    },
 }
 
 # "elo" below ~1320 falls back to Stockfish "Skill Level" (UCI_Elo has a minimum).
@@ -1119,9 +1127,11 @@ def board_css(board, orientation, colors, selected, targets, last_move, hint_uci
         box_shadow = ", ".join(shadows) if shadows else "none"
 
         if piece and piece.color == chess.WHITE:
-            fg, shadow = "#ffffff", "0 0 2px #000, 0 0 3px #000, 0 1px 2px #000"
+            fg = colors.get("white_piece", "#ffffff")
+            shadow = colors.get("white_shadow", "0 0 2px #000, 0 0 3px #000, 0 1px 2px #000")
         elif piece:
-            fg, shadow = "#151515", "0 0 2px #fff, 0 0 3px #fff"
+            fg = colors.get("black_piece", "#151515")
+            shadow = colors.get("black_shadow", "0 0 2px #fff, 0 0 3px #fff")
         elif sq in targets:
             fg, shadow = "rgba(46,139,255,.9)", "none"
         else:
@@ -1300,7 +1310,7 @@ st.sidebar.radio("♟️ " + t("side"), ["White", "Black"], key="side_choice", h
                  format_func=lambda s: t("white") if s == "White" else t("black"), on_change=new_game)
 st.sidebar.caption(t("changing_note"))
 st.sidebar.selectbox("🤖 " + t("persona"), list(PERSONAS), key="persona")
-theme_name = st.sidebar.selectbox("🎨 " + t("theme"), list(THEMES), key="theme")
+theme_name = st.sidebar.selectbox("🎨 " + t("theme"), list(THEMES), index=list(THEMES).index("Old Money"), key="theme")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎨 " + t("overlays"))
@@ -1335,6 +1345,23 @@ st.sidebar.caption("⚙️ " + (pool["name"] if pool else t("builtin_engine")))
 css = BASE_CSS
 if is_ar:
     css += ".st-key-panel { direction:rtl; text-align:right; }"
+if theme_name == "Old Money":
+    # Warm, muted "old money" chrome: parchment text, brass accents, a serif
+    # typeface, in place of the default dark/neon-green tech look.
+    css += """
+    .stApp { background-color: #171310 !important; }
+    .stApp, .stApp p, .stApp li, .stApp span, .stApp label, .stApp div { font-family: Georgia, 'Times New Roman', serif !important; }
+    section[data-testid="stSidebar"] { background-color: #1d1712 !important; border-right: 1px solid #5c4430; }
+    .game-over-banner, .coach-box, .puzzle-banner {
+        background:#241d16 !important; border-color:#8a6d3b !important;
+    }
+    .stButton button, .stDownloadButton button {
+        background:#241d16 !important; color:#e4d9bd !important; border:1px solid #8a6d3b !important;
+    }
+    .stButton button:hover, .stDownloadButton button:hover { border-color:#d9c48f !important; color:#f6ecd2 !important; }
+    div[data-testid="stMetricValue"], div[data-testid="stMetricLabel"] { color:#d9c48f !important; }
+    .evalfill { background:#e4d9bd !important; }
+    """
 st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 if ss.sound:
