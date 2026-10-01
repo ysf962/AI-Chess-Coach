@@ -30,7 +30,7 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="The Chess Coach", layout="wide", page_icon="âï¸")
+st.set_page_config(page_title="The Chess Coach", layout="wide", page_icon="♟️")
 
 # ==========================================
 # 1. CONSTANTS & DATA TABLES
@@ -46,19 +46,15 @@ STARTING_PIECES = {chess.PAWN: 8, chess.KNIGHT: 2, chess.BISHOP: 2, chess.ROOK: 
 
 # Outline (white) / solid (black) symbols, used for captured-piece strips
 PIECE_SYMBOLS = {
-    (chess.PAWN, chess.WHITE): "â", (chess.KNIGHT, chess.WHITE): "â", (chess.BISHOP, chess.WHITE): "â",
-    (chess.ROOK, chess.WHITE): "â", (chess.QUEEN, chess.WHITE): "â", (chess.KING, chess.WHITE): "â",
-    (chess.PAWN, chess.BLACK): "â", (chess.KNIGHT, chess.BLACK): "â", (chess.BISHOP, chess.BLACK): "â",
-    (chess.ROOK, chess.BLACK): "â", (chess.QUEEN, chess.BLACK): "â", (chess.KING, chess.BLACK): "â",
+    (chess.PAWN, chess.WHITE): "♙", (chess.KNIGHT, chess.WHITE): "♘", (chess.BISHOP, chess.WHITE): "♗",
+    (chess.ROOK, chess.WHITE): "♖", (chess.QUEEN, chess.WHITE): "♕", (chess.KING, chess.WHITE): "♔",
+    (chess.PAWN, chess.BLACK): "♟", (chess.KNIGHT, chess.BLACK): "♞", (chess.BISHOP, chess.BLACK): "♝",
+    (chess.ROOK, chess.BLACK): "♜", (chess.QUEEN, chess.BLACK): "♛", (chess.KING, chess.BLACK): "♚",
 }
-# Distinct text-style chess glyphs for each side.
-BOARD_GLYPH_WHITE = {
-    chess.PAWN: "â\ufe0e", chess.KNIGHT: "â", chess.BISHOP: "â",
-    chess.ROOK: "â", chess.QUEEN: "â", chess.KING: "â",
-}
-BOARD_GLYPH_BLACK = {
-    chess.PAWN: "â\ufe0e", chess.KNIGHT: "â", chess.BISHOP: "â",
-    chess.ROOK: "â", chess.QUEEN: "â", chess.KING: "â",
+# Solid glyphs for the playable board (colored with CSS). \ufe0e forces text style on the pawn.
+BOARD_GLYPH = {
+    chess.PAWN: "♟\ufe0e", chess.KNIGHT: "♞", chess.BISHOP: "♝",
+    chess.ROOK: "♜", chess.QUEEN: "♛", chess.KING: "♚",
 }
 
 # Piece-square tables are written the way you read a board (rank 8 first, from White's side),
@@ -149,12 +145,12 @@ OPENINGS_DB = {
     "d2d4 d7d5 c2c4 d5c4": "Queen's Gambit Accepted",
     "d2d4 g8f6": "Indian Defense",
     "c2c4": "English Opening",
-    "g1f3": "RÃ©ti Opening",
+    "g1f3": "Réti Opening",
     "f2f4": "Bird's Opening",
 }
 
 # Every theme may optionally override piece coloring (otherwise plain white/black
-# pieces with a dark/light outline are used â see board_css).
+# pieces with a dark/light outline are used — see board_css).
 THEMES = {
     "Classic Wood": {"light": "#f0d9b5", "dark": "#b58863"},
     "Lichess Green": {"light": "#ffffdd", "dark": "#86a666"},
@@ -178,7 +174,7 @@ BOT_CONFIGS = {
 }
 
 CATEGORIES = ["Brilliant", "Best", "Good", "Inaccuracy", "Mistake", "Blunder"]
-CAT_ICON = {"Brilliant": "ð", "Best": "â­", "Good": "â", "Inaccuracy": "â ï¸", "Mistake": "â", "Blunder": "ð´"}
+CAT_ICON = {"Brilliant": "💎", "Best": "⭐", "Good": "✅", "Inaccuracy": "⚠️", "Mistake": "❌", "Blunder": "🔴"}
 CAT_ALERT = {"Brilliant": "success", "Best": "success", "Good": "info",
              "Inaccuracy": "warning", "Mistake": "warning", "Blunder": "error"}
 CAT_NAG = {
@@ -207,9 +203,9 @@ PERSONAS = {
     "Coach Sparky (Encouraging)": {
         "intro": "You've got this! Every game makes you stronger.",
         "quotes": {
-            "Brilliant": ["WOW! That was incredible. You should be proud! ð",
+            "Brilliant": ["WOW! That was incredible. You should be proud! 🌟",
                           "Absolutely brilliant! You're playing like a pro!"],
-            "Best": ["Perfect move! Keep it up! â­",
+            "Best": ["Perfect move! Keep it up! ⭐",
                      "Great job, that's exactly the move I was hoping for!"],
             "Good": ["Nice one! There was an even better move, but this works well.",
                      "Good thinking! You're doing great."],
@@ -248,97 +244,97 @@ SOUND_URLS = {
 
 # ---------- Translations: key -> (English, Arabic) ----------
 TR = {
-    "controls": ("Controls & Settings", "Ø§ÙØªØ­ÙÙ ÙØ§ÙØ¥Ø¹Ø¯Ø§Ø¯Ø§Øª"),
-    "audio": ("Enable Audio", "ØªÙØ¹ÙÙ Ø§ÙØµÙØª"),
-    "difficulty": ("Bot Difficulty", "ÙØ³ØªÙÙ Ø§ÙØ®ØµÙ"),
-    "persona": ("AI Coach Persona", "Ø´Ø®ØµÙØ© Ø§ÙÙØ¯Ø±Ø¨"),
-    "side": ("Choose Side", "Ø§Ø®ØªØ± Ø§ÙÙÙÙ"),
-    "white": ("White", "Ø£Ø¨ÙØ¶"),
-    "black": ("Black", "Ø£Ø³ÙØ¯"),
-    "theme": ("Board Theme", "Ø´ÙÙ Ø§ÙØ±ÙØ¹Ø©"),
-    "overlays": ("Board Overlays", "ÙØ¤Ø´Ø±Ø§Øª Ø§ÙØ±ÙØ¹Ø©"),
-    "threats": ("Threat & Guard Indicators", "ÙØ¤Ø´Ø±Ø§Øª Ø§ÙØªÙØ¯ÙØ¯ ÙØ§ÙØ­ÙØ§ÙØ©"),
-    "legal": ("Show legal moves", "Ø¥Ø¸ÙØ§Ø± Ø§ÙØ­Ø±ÙØ§Øª Ø§ÙÙØªØ§Ø­Ø©"),
-    "evalbar": ("Live Evaluation Bar", "Ø´Ø±ÙØ· Ø§ÙØªÙÙÙÙ Ø§ÙÙØ¨Ø§Ø´Ø±"),
-    "stats": ("Player Stats", "Ø¥Ø­ØµØ§Ø¦ÙØ§Øª Ø§ÙÙØ§Ø¹Ø¨"),
-    "rating": ("Your Rating (ELO)", "ØªØµÙÙÙÙ (ELO)"),
-    "games": ("Games played", "Ø§ÙÙØ¨Ø§Ø±ÙØ§Øª"),
-    "record": ("Record (W/D/L)", "Ø§ÙØ³Ø¬Ù (ÙÙØ²/ØªØ¹Ø§Ø¯Ù/Ø®Ø³Ø§Ø±Ø©)"),
-    "badges": ("Badges Unlocked", "Ø§ÙØ£ÙØ³ÙØ© Ø§ÙÙÙØªØ³Ø¨Ø©"),
-    "reset_rating": ("Reset rating", "Ø¥Ø¹Ø§Ø¯Ø© ØªØ¹ÙÙÙ Ø§ÙØªØµÙÙÙ"),
-    "reset_rating_confirm": ("Yes, erase my saved rating and badges", "ÙØ¹ÙØ Ø§ÙØ³Ø­ ØªØµÙÙÙÙ ÙØ£ÙØ³ÙØªÙ Ø§ÙÙØ­ÙÙØ¸Ø©"),
-    "new_game": ("New Game", "ÙØ¨Ø§Ø±Ø§Ø© Ø¬Ø¯ÙØ¯Ø©"),
-    "undo": ("Undo", "ØªØ±Ø§Ø¬Ø¹"),
-    "undo_help": ("Using undo makes the game unrated.", "Ø§Ø³ØªØ®Ø¯Ø§Ù Ø§ÙØªØ±Ø§Ø¬Ø¹ ÙØ¬Ø¹Ù Ø§ÙÙØ¨Ø§Ø±Ø§Ø© ØºÙØ± ÙØµÙÙÙØ©."),
-    "hint": ("Hint", "ØªÙÙÙØ­"),
-    "resign": ("Resign", "Ø§Ø³ØªØ³ÙØ§Ù"),
-    "export": ("Export PGN", "ØªØµØ¯ÙØ± PGN"),
-    "you": ("You", "Ø£ÙØª"),
-    "bot": ("Bot", "Ø§ÙØ®ØµÙ"),
-    "your_turn": ("Your turn", "Ø¯ÙØ±Ù"),
-    "check": ("Check!", "ÙØ´!"),
-    "unrated_note": ("Unrated game (undo used)", "ÙØ¨Ø§Ø±Ø§Ø© ØºÙØ± ÙØµÙÙÙØ© (ØªÙ Ø§Ø³ØªØ®Ø¯Ø§Ù Ø§ÙØªØ±Ø§Ø¬Ø¹)"),
+    "controls": ("Controls & Settings", "التحكم والإعدادات"),
+    "audio": ("Enable Audio", "تفعيل الصوت"),
+    "difficulty": ("Bot Difficulty", "مستوى الخصم"),
+    "persona": ("AI Coach Persona", "شخصية المدرب"),
+    "side": ("Choose Side", "اختر اللون"),
+    "white": ("White", "أبيض"),
+    "black": ("Black", "أسود"),
+    "theme": ("Board Theme", "شكل الرقعة"),
+    "overlays": ("Board Overlays", "مؤشرات الرقعة"),
+    "threats": ("Threat & Guard Indicators", "مؤشرات التهديد والحماية"),
+    "legal": ("Show legal moves", "إظهار الحركات المتاحة"),
+    "evalbar": ("Live Evaluation Bar", "شريط التقييم المباشر"),
+    "stats": ("Player Stats", "إحصائيات اللاعب"),
+    "rating": ("Your Rating (ELO)", "تصنيفك (ELO)"),
+    "games": ("Games played", "المباريات"),
+    "record": ("Record (W/D/L)", "السجل (فوز/تعادل/خسارة)"),
+    "badges": ("Badges Unlocked", "الأوسمة المكتسبة"),
+    "reset_rating": ("Reset rating", "إعادة تعيين التصنيف"),
+    "reset_rating_confirm": ("Yes, erase my saved rating and badges", "نعم، امسح تصنيفي وأوسمتي المحفوظة"),
+    "new_game": ("New Game", "مباراة جديدة"),
+    "undo": ("Undo", "تراجع"),
+    "undo_help": ("Using undo makes the game unrated.", "استخدام التراجع يجعل المباراة غير مصنّفة."),
+    "hint": ("Hint", "تلميح"),
+    "resign": ("Resign", "استسلام"),
+    "export": ("Export PGN", "تصدير PGN"),
+    "you": ("You", "أنت"),
+    "bot": ("Bot", "الخصم"),
+    "your_turn": ("Your turn", "دورك"),
+    "check": ("Check!", "كش!"),
+    "unrated_note": ("Unrated game (undo used)", "مباراة غير مصنّفة (تم استخدام التراجع)"),
     "unrated_msg": ("Your rating is unchanged because this game was unrated.",
-                    "ÙÙ ÙØªØºÙØ± ØªØµÙÙÙÙ ÙØ£Ù Ø§ÙÙØ¨Ø§Ø±Ø§Ø© ØºÙØ± ÙØµÙÙÙØ©."),
+                    "لم يتغير تصنيفك لأن المباراة غير مصنّفة."),
     "changing_note": ("Changing side or difficulty starts a new game.",
-                      "ØªØºÙÙØ± Ø§ÙÙÙÙ Ø£Ù Ø§ÙÙØ³ØªÙÙ ÙØ¨Ø¯Ø£ ÙØ¨Ø§Ø±Ø§Ø© Ø¬Ø¯ÙØ¯Ø©."),
-    "tab_review": ("Review", "Ø§ÙÙØ±Ø§Ø¬Ø¹Ø©"),
-    "tab_puzzles": ("Puzzles", "Ø§ÙØ£ÙØºØ§Ø²"),
-    "tab_coach": ("Coach", "Ø§ÙÙØ¯Ø±Ø¨"),
-    "tab_opening": ("Opening", "Ø§ÙØ§ÙØªØªØ§Ø­ÙØ©"),
-    "tab_history": ("History", "Ø§ÙØ³Ø¬Ù"),
-    "accuracy": ("Accuracy", "Ø§ÙØ¯ÙØ©"),
-    "eval_graph": ("Evaluation Graph", "ÙÙØ­ÙÙ Ø§ÙØªÙÙÙÙ"),
-    "no_moves": ("Play a few moves to see your analysis here.", "Ø§ÙØ¹Ø¨ Ø¨Ø¶Ø¹ ÙÙÙØ§Øª ÙØªØ¸ÙØ± Ø§ÙØªØ­ÙÙÙØ§Øª ÙÙØ§."),
-    "key_moments": ("Key moments", "Ø§ÙÙØ­Ø¸Ø§Øª Ø§ÙØ­Ø§Ø³ÙØ©"),
-    "better_was": ("Better was", "Ø§ÙØ£ÙØ¶Ù ÙØ§Ù"),
-    "promote_to": ("Promote to", "Ø§ÙØªØ±ÙÙØ© Ø¥ÙÙ"),
-    "res_win": ("ð You won!", "ð ÙØ²Øª!"),
-    "res_loss": ("ð You lost.", "ð Ø®Ø³Ø±Øª."),
-    "res_draw": ("ð¤ Draw", "ð¤ ØªØ¹Ø§Ø¯Ù"),
-    "elo_change": ("Rating change", "ØªØºÙÙØ± Ø§ÙØªØµÙÙÙ"),
-    "new_rating": ("New rating", "Ø§ÙØªØµÙÙÙ Ø§ÙØ¬Ø¯ÙØ¯"),
-    "puzzle_title": ("Puzzles from your mistakes", "Ø£ÙØºØ§Ø² ÙÙ Ø£Ø®Ø·Ø§Ø¦Ù"),
+                      "تغيير اللون أو المستوى يبدأ مباراة جديدة."),
+    "tab_review": ("Review", "المراجعة"),
+    "tab_puzzles": ("Puzzles", "الألغاز"),
+    "tab_coach": ("Coach", "المدرب"),
+    "tab_opening": ("Opening", "الافتتاحية"),
+    "tab_history": ("History", "السجل"),
+    "accuracy": ("Accuracy", "الدقة"),
+    "eval_graph": ("Evaluation Graph", "منحنى التقييم"),
+    "no_moves": ("Play a few moves to see your analysis here.", "العب بضع نقلات لتظهر التحليلات هنا."),
+    "key_moments": ("Key moments", "اللحظات الحاسمة"),
+    "better_was": ("Better was", "الأفضل كان"),
+    "promote_to": ("Promote to", "الترقية إلى"),
+    "res_win": ("🎉 You won!", "🎉 فزت!"),
+    "res_loss": ("💀 You lost.", "💀 خسرت."),
+    "res_draw": ("🤝 Draw", "🤝 تعادل"),
+    "elo_change": ("Rating change", "تغيّر التصنيف"),
+    "new_rating": ("New rating", "التصنيف الجديد"),
+    "puzzle_title": ("Puzzles from your mistakes", "ألغاز من أخطائك"),
     "puzzle_none": ("No puzzles yet. Your big mistakes are saved here automatically.",
-                    "ÙØ§ ØªÙØ¬Ø¯ Ø£ÙØºØ§Ø² Ø¨Ø¹Ø¯! ØªÙØ­ÙØ¸ Ø£Ø®Ø·Ø§Ø¤Ù Ø§ÙÙØ¨ÙØ±Ø© ÙÙØ§ ØªÙÙØ§Ø¦ÙÙØ§."),
-    "puzzle_count": ("saved", "ÙØ­ÙÙØ¸Ø©"),
-    "puzzle_solved": ("solved", "ÙØ­ÙÙÙØ©"),
-    "puzzle_pick": ("Choose a puzzle", "Ø§Ø®ØªØ± ÙØºØ²ÙØ§"),
-    "puzzle_start": ("Start puzzle", "Ø§Ø¨Ø¯Ø£ Ø§ÙÙØºØ²"),
-    "puzzle_giveup": ("Show solution", "Ø£Ø¸ÙØ± Ø§ÙØ­Ù"),
-    "puzzle_exit": ("Back to game", "Ø§ÙØ¹ÙØ¯Ø© Ø¥ÙÙ Ø§ÙÙØ¨Ø§Ø±Ø§Ø©"),
-    "puzzle_correct": ("â Correct! Well done.", "â ØµØ­ÙØ­! Ø£Ø­Ø³ÙØª."),
-    "puzzle_wrong": ("â Not the best move. Try again.", "â ÙÙØ³Øª Ø§ÙØ£ÙØ¶ÙØ Ø­Ø§ÙÙ ÙØ±Ø© Ø£Ø®Ø±Ù."),
-    "puzzle_banner": ("ð§© Puzzle: find the best move", "ð§© ÙØºØ²: Ø¬Ø¯ Ø£ÙØ¶Ù ÙÙÙØ©"),
-    "puzzle_solution": ("Solution", "Ø§ÙØ­Ù"),
-    "recommended": ("Recommended move", "Ø§ÙÙÙÙØ© Ø§ÙÙÙØªØ±Ø­Ø©"),
-    "tactical_warning": ("Tactical warning", "ØªØ­Ø°ÙØ± ØªÙØªÙÙÙ"),
-    "opening_id": ("Identified opening", "Ø§ÙØ§ÙØªØªØ§Ø­ÙØ© Ø§ÙÙØ­Ø¯Ø¯Ø©"),
-    "top_master": ("Top master moves in this position", "Ø£Ø´ÙØ± ÙÙÙØ§Øª Ø§ÙØ£Ø³Ø§ØªØ°Ø© ÙÙ ÙØ°Ø§ Ø§ÙÙØ¶Ø¹"),
+                    "لا توجد ألغاز بعد! تُحفظ أخطاؤك الكبيرة هنا تلقائيًا."),
+    "puzzle_count": ("saved", "محفوظة"),
+    "puzzle_solved": ("solved", "محلولة"),
+    "puzzle_pick": ("Choose a puzzle", "اختر لغزًا"),
+    "puzzle_start": ("Start puzzle", "ابدأ اللغز"),
+    "puzzle_giveup": ("Show solution", "أظهر الحل"),
+    "puzzle_exit": ("Back to game", "العودة إلى المباراة"),
+    "puzzle_correct": ("✅ Correct! Well done.", "✅ صحيح! أحسنت."),
+    "puzzle_wrong": ("❌ Not the best move. Try again.", "❌ ليست الأفضل، حاول مرة أخرى."),
+    "puzzle_banner": ("🧩 Puzzle: find the best move", "🧩 لغز: جد أفضل نقلة"),
+    "puzzle_solution": ("Solution", "الحل"),
+    "recommended": ("Recommended move", "النقلة المقترحة"),
+    "tactical_warning": ("Tactical warning", "تحذير تكتيكي"),
+    "opening_id": ("Identified opening", "الافتتاحية المحددة"),
+    "top_master": ("Top master moves in this position", "أشهر نقلات الأساتذة في هذا الوضع"),
     "builtin_engine": ("Built-in engine (install Stockfish for full strength)",
-                       "Ø§ÙÙØ­Ø±Ù Ø§ÙÙØ¯ÙØ¬ (Ø«Ø¨ÙØª Stockfish ÙÙÙØ© Ø£ÙØ¨Ø±)"),
-    "col_move": ("Move", "Ø§ÙÙÙÙØ©"),
-    "col_white_wins": ("White wins", "ÙÙØ² Ø§ÙØ£Ø¨ÙØ¶"),
-    "col_draws": ("Draws", "ØªØ¹Ø§Ø¯Ù"),
-    "col_black_wins": ("Black wins", "ÙÙØ² Ø§ÙØ£Ø³ÙØ¯"),
-    "diff_Easy": ("Easy", "Ø³ÙÙ"),
-    "diff_Medium": ("Medium", "ÙØªÙØ³Ø·"),
-    "diff_Hard": ("Hard", "ØµØ¹Ø¨"),
-    "diff_Grandmaster": ("Grandmaster", "Ø£Ø³ØªØ§Ø° ÙØ¨ÙØ±"),
-    "cat_Brilliant": ("Brilliant", "Ø±Ø§Ø¦Ø¹Ø©"),
-    "cat_Best": ("Best", "Ø§ÙØ£ÙØ¶Ù"),
-    "cat_Good": ("Good", "Ø¬ÙØ¯Ø©"),
-    "cat_Inaccuracy": ("Inaccuracy", "ØºÙØ± Ø¯ÙÙÙØ©"),
-    "cat_Mistake": ("Mistake", "Ø®Ø·Ø£"),
-    "cat_Blunder": ("Blunder", "Ø®Ø·Ø£ ÙØ§Ø¯Ø­"),
-    "term_CHECKMATE": ("Checkmate", "ÙØ´ ÙØ§Øª"),
-    "term_STALEMATE": ("Stalemate", "ØªØ¹Ø§Ø¯Ù Ø¨Ø§ÙØ¬ÙÙØ¯"),
-    "term_INSUFFICIENT_MATERIAL": ("Insufficient material", "ÙØ§Ø¯Ø© ØºÙØ± ÙØ§ÙÙØ©"),
-    "term_THREEFOLD_REPETITION": ("Threefold repetition", "ØªÙØ±Ø§Ø± Ø«ÙØ§Ø«Ù"),
-    "term_FIVEFOLD_REPETITION": ("Fivefold repetition", "ØªÙØ±Ø§Ø± Ø®ÙØ§Ø³Ù"),
-    "term_FIFTY_MOVES": ("50-move rule", "ÙØ§Ø¹Ø¯Ø© Ø§ÙØ®ÙØ³ÙÙ ÙÙÙØ©"),
-    "term_SEVENTYFIVE_MOVES": ("75-move rule", "ÙØ§Ø¹Ø¯Ø© Ø§ÙØ®ÙØ³ ÙØ§ÙØ³Ø¨Ø¹ÙÙ ÙÙÙØ©"),
-    "term_RESIGNATION": ("Resignation", "Ø§Ø³ØªØ³ÙØ§Ù"),
+                       "المحرك المدمج (ثبّت Stockfish لقوة أكبر)"),
+    "col_move": ("Move", "النقلة"),
+    "col_white_wins": ("White wins", "فوز الأبيض"),
+    "col_draws": ("Draws", "تعادل"),
+    "col_black_wins": ("Black wins", "فوز الأسود"),
+    "diff_Easy": ("Easy", "سهل"),
+    "diff_Medium": ("Medium", "متوسط"),
+    "diff_Hard": ("Hard", "صعب"),
+    "diff_Grandmaster": ("Grandmaster", "أستاذ كبير"),
+    "cat_Brilliant": ("Brilliant", "رائعة"),
+    "cat_Best": ("Best", "الأفضل"),
+    "cat_Good": ("Good", "جيدة"),
+    "cat_Inaccuracy": ("Inaccuracy", "غير دقيقة"),
+    "cat_Mistake": ("Mistake", "خطأ"),
+    "cat_Blunder": ("Blunder", "خطأ فادح"),
+    "term_CHECKMATE": ("Checkmate", "كش مات"),
+    "term_STALEMATE": ("Stalemate", "تعادل بالجمود"),
+    "term_INSUFFICIENT_MATERIAL": ("Insufficient material", "مادة غير كافية"),
+    "term_THREEFOLD_REPETITION": ("Threefold repetition", "تكرار ثلاثي"),
+    "term_FIVEFOLD_REPETITION": ("Fivefold repetition", "تكرار خماسي"),
+    "term_FIFTY_MOVES": ("50-move rule", "قاعدة الخمسين نقلة"),
+    "term_SEVENTYFIVE_MOVES": ("75-move rule", "قاعدة الخمس والسبعين نقلة"),
+    "term_RESIGNATION": ("Resignation", "استسلام"),
 }
 
 
@@ -354,7 +350,7 @@ def tr_term(name):
 
 
 # ==========================================
-# 2. PERSISTENT PROFILE (rating, record, badges â survive across sessions/restarts)
+# 2. PERSISTENT PROFILE (rating, record, badges — survive across sessions/restarts)
 # ==========================================
 DEFAULT_PROFILE = {"user_elo": 800, "games_played": 0, "record": {"W": 0, "D": 0, "L": 0}, "badges": []}
 PROFILE_PATH = Path(os.environ.get("CHESS_COACH_PROFILE", "")) if os.environ.get("CHESS_COACH_PROFILE") \
@@ -648,7 +644,7 @@ def classify(loss, is_best, is_sac, mover_before, mover_after):
 
 
 def assess_move(board, move):
-    """Grade `move` (legal in `board`) against best play. Never mutates `board` â this
+    """Grade `move` (legal in `board`) against best play. Never mutates `board` — this
     makes it safe to call from a worker thread while other code reads the same board."""
     sign = 1 if board.turn == chess.WHITE else -1
     best_uci, before_cp = get_analysis(board)
@@ -740,10 +736,10 @@ def apply_move(move, by_player):
     rec["by_player"] = by_player
     ss.log.append(rec)
     if by_player and rec["cat"] == "Brilliant":
-        ss.badges.add("ð Brilliant Move")
+        ss.badges.add("💎 Brilliant Move")
         save_profile()
     if by_player and rec["gives_mate"] and rec["piece"] == chess.PAWN:
-        ss.badges.add("âï¸ Pawn Checkmate")
+        ss.badges.add("♟️ Pawn Checkmate")
         save_profile()
     return rec
 
@@ -768,14 +764,14 @@ def record_result(score):
 
     player_recs = [r for r in ss.log if r["by_player"]]
     if score == 1.0:
-        ss.badges.add("ð First Win")
+        ss.badges.add("🏆 First Win")
         if ss.game_difficulty in ("Hard", "Grandmaster"):
-            ss.badges.add("ð Giant Slayer")
+            ss.badges.add("👑 Giant Slayer")
         sign = 1 if ss.player_color == chess.WHITE else -1
         if any(sign * r["cp_after"] <= -300 for r in ss.log):
-            ss.badges.add("ð¥ Comeback")
+            ss.badges.add("🔥 Comeback")
     if len(player_recs) >= 15 and all(r["cat"] not in ("Mistake", "Blunder") for r in player_recs):
-        ss.badges.add("ð¯ Clean Game")
+        ss.badges.add("🎯 Clean Game")
     save_profile()
 
 
@@ -797,7 +793,7 @@ def finish_game():
 
 
 def play_player_move(move):
-    """Assess the player's move and pick the bot's reply at the same time â both
+    """Assess the player's move and pick the bot's reply at the same time — both
     only need to read the resulting position, so running them in parallel (on
     separate Stockfish processes) roughly halves the wait compared to doing them
     one after another."""
@@ -821,10 +817,10 @@ def play_player_move(move):
     board.push(move)
     ss.log.append(rec)
     if rec["cat"] == "Brilliant":
-        ss.badges.add("ð Brilliant Move")
+        ss.badges.add("💎 Brilliant Move")
         save_profile()
     if rec["gives_mate"] and rec["piece"] == chess.PAWN:
-        ss.badges.add("âï¸ Pawn Checkmate")
+        ss.badges.add("♟️ Pawn Checkmate")
         save_profile()
 
     ss.selected_sq = None
@@ -974,7 +970,7 @@ def submit_puzzle_move(move):
         pb.push(move)
         pz["done"] = True
         ss.puzzles[pz["idx"]]["solved"] = True
-        ss.badges.add("ð§© Puzzle Solver")
+        ss.badges.add("🧩 Puzzle Solver")
         save_profile()
         ss.puzzle_msg = ("success", "puzzle_correct")
         queue_sound("move")
@@ -1067,18 +1063,9 @@ BOARD_BASE_CSS = """
 .st-key-board button { position:relative; aspect-ratio:1/1; width:100% !important; min-height:0 !important;
     height:auto !important; padding:0 !important; border:none !important; border-radius:0 !important;
     line-height:1 !important; overflow:hidden; cursor:pointer; }
-.st-key-board button p { font-size:clamp(1.75rem,7.2vw,3rem) !important; line-height:1 !important; margin:0 !important;
-    font-family:"Segoe UI Symbol","Noto Sans Symbols 2","DejaVu Sans","Apple Symbols",sans-serif !important;
-    font-weight:900 !important; -webkit-font-smoothing:antialiased !important; text-rendering:geometricPrecision !important;
-    -webkit-text-stroke:0.45px currentColor !important;
-    text-shadow:0 1px 0 rgba(255,255,255,.28), 0 2px 2px rgba(0,0,0,.45), 0 4px 7px rgba(0,0,0,.30) !important;
-    transform:translateY(-1px) scale(1.03);
-}
+.st-key-board button p { font-size:clamp(1.6rem,7vw,2.8rem) !important; line-height:1 !important; margin:0 !important;
+    font-family:"Segoe UI Symbol","Noto Sans Symbols 2","DejaVu Sans","Apple Symbols",sans-serif !important; }
 .st-key-board button:hover { filter:brightness(1.12); }
-
-/* Keep Streamlit Material icon ligatures from being replaced by the Old Money serif font. */
-.stApp [data-testid="stIconMaterial"], .stApp .material-symbols-rounded, .stApp .material-symbols-outlined,
-.stApp span[class*="material-symbols"] { font-family:"Material Symbols Rounded","Material Symbols Outlined",sans-serif !important; font-weight:normal !important; }
 """
 
 TINT_LAST = "rgba(246,246,105,.45)"
@@ -1181,10 +1168,9 @@ def render_board(board, orientation, theme, selected, targets, last_move, hint_u
                 sq = chess.square(f, r)
                 piece = board.piece_at(sq)
                 if piece:
-                    glyphs = BOARD_GLYPH_WHITE if piece.color == chess.WHITE else BOARD_GLYPH_BLACK
-                    label = glyphs[piece.piece_type]
+                    label = BOARD_GLYPH[piece.piece_type]
                 elif sq in targets:
-                    label = "â¢"
+                    label = "•"
                 else:
                     label = "\u00a0"
                 col.button(label, key=f"sq_{chess.square_name(sq)}", on_click=on_square_click,
@@ -1219,7 +1205,7 @@ def material_diff(board):
 def play_sound(kind):
     """Play a sound effect. Each rerun renders this inside a brand-new, sandboxed
     iframe, and browsers block autoplay-with-sound in a frame that hasn't itself
-    received a user gesture â the click happened in the *top* page, not in this
+    received a user gesture — the click happened in the *top* page, not in this
     throwaway iframe, so a plain <audio autoplay> here is silently blocked. We
     instead reach up to window.parent (the actual Streamlit page, which persists
     across reruns and did receive the click) and keep one set of <audio> elements
@@ -1313,29 +1299,29 @@ def local_opening_name(board):
 init_state()
 ss = st.session_state
 
-st.sidebar.radio("ð Language / Ø§ÙÙØºØ©", ["EN", "AR"], key="lang", horizontal=True)
+st.sidebar.radio("🌐 Language / اللغة", ["EN", "AR"], key="lang", horizontal=True)
 is_ar = ss.lang == "AR"
-st.sidebar.title("ð® " + t("controls"))
+st.sidebar.title("🎮 " + t("controls"))
 
-audio_enabled = st.sidebar.toggle("ð " + t("audio"), value=True, key="audio")
-st.sidebar.selectbox("ð¯ " + t("difficulty"), list(BOT_CONFIGS), index=1, key="difficulty_choice",
+audio_enabled = st.sidebar.toggle("🔊 " + t("audio"), value=True, key="audio")
+st.sidebar.selectbox("🎯 " + t("difficulty"), list(BOT_CONFIGS), index=1, key="difficulty_choice",
                      format_func=lambda d: t("diff_" + d), on_change=new_game)
-st.sidebar.radio("âï¸ " + t("side"), ["White", "Black"], key="side_choice", horizontal=True,
+st.sidebar.radio("♟️ " + t("side"), ["White", "Black"], key="side_choice", horizontal=True,
                  format_func=lambda s: t("white") if s == "White" else t("black"), on_change=new_game)
 st.sidebar.caption(t("changing_note"))
-st.sidebar.selectbox("ð¤ " + t("persona"), list(PERSONAS), key="persona")
-theme_name = st.sidebar.selectbox("ð¨ " + t("theme"), list(THEMES), index=list(THEMES).index("Old Money"), key="theme")
+st.sidebar.selectbox("🤖 " + t("persona"), list(PERSONAS), key="persona")
+theme_name = st.sidebar.selectbox("🎨 " + t("theme"), list(THEMES), index=list(THEMES).index("Old Money"), key="theme")
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("ð¨ " + t("overlays"))
+st.sidebar.subheader("🎨 " + t("overlays"))
 show_threats = st.sidebar.checkbox(t("threats"), value=True, key="show_threats")
 show_legal = st.sidebar.checkbox(t("legal"), value=True, key="show_legal")
 show_eval_bar = st.sidebar.checkbox(t("evalbar"), value=True, key="show_eval")
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("ð " + t("stats"))
+st.sidebar.subheader("🏆 " + t("stats"))
 st.sidebar.metric(t("rating"), ss.user_elo)
-st.sidebar.caption(f"{t('games')}: {ss.games_played}  Â·  {t('record')}: "
+st.sidebar.caption(f"{t('games')}: {ss.games_played}  ·  {t('record')}: "
                    f"{ss.record['W']}/{ss.record['D']}/{ss.record['L']}")
 if ss.badges:
     st.sidebar.markdown(f"**{t('badges')}:**")
@@ -1347,11 +1333,11 @@ with st.sidebar.expander(t("reset_rating")):
               disabled=not ss.get("confirm_reset"), width="stretch")
 
 st.sidebar.markdown("---")
-st.sidebar.button("ð " + t("new_game"), key="btn_new", on_click=new_game, width="stretch")
-st.sidebar.download_button("ð¥ " + t("export"), data=build_pgn(), file_name="chess_match.pgn",
+st.sidebar.button("🔄 " + t("new_game"), key="btn_new", on_click=new_game, width="stretch")
+st.sidebar.download_button("📥 " + t("export"), data=build_pgn(), file_name="chess_match.pgn",
                            mime="text/plain", width="stretch")
 pool = get_engines()
-st.sidebar.caption("âï¸ " + (pool["name"] if pool else t("builtin_engine")))
+st.sidebar.caption("⚙️ " + (pool["name"] if pool else t("builtin_engine")))
 
 # ==========================================
 # 9. MAIN DASHBOARD
@@ -1365,8 +1351,6 @@ if theme_name == "Old Money":
     css += """
     .stApp { background-color: #171310 !important; }
     .stApp, .stApp p, .stApp li, .stApp span, .stApp label, .stApp div { font-family: Georgia, 'Times New Roman', serif !important; }
-    .stApp [data-testid="stIconMaterial"], .stApp .material-symbols-rounded, .stApp .material-symbols-outlined,
-    .stApp span[class*="material-symbols"] { font-family:"Material Symbols Rounded","Material Symbols Outlined",sans-serif !important; }
     section[data-testid="stSidebar"] { background-color: #1d1712 !important; border-right: 1px solid #5c4430; }
     .game-over-banner, .coach-box, .puzzle-banner {
         background:#241d16 !important; border-color:#8a6d3b !important;
@@ -1416,7 +1400,7 @@ with col_board:
             elo_line = t("unrated_msg")
         elif ss.elo_msg:
             delta, new_elo = ss.elo_msg
-            elo_line = f"{t('elo_change')}: <b>{delta:+d}</b> Â· {t('new_rating')}: <b>{new_elo}</b>"
+            elo_line = f"{t('elo_change')}: <b>{delta:+d}</b> · {t('new_rating')}: <b>{new_elo}</b>"
         else:
             elo_line = ""
         st.markdown(
@@ -1431,7 +1415,7 @@ with col_board:
         you_adv = f" +{abs(adv)}" if (adv > 0) == (ss.player_color == chess.WHITE) and adv != 0 else ""
         cfg = BOT_CONFIGS[ss.game_difficulty]
         st.markdown(
-            f'<div class="playerline">ð¤ <b>{t("bot")}</b> ({t("diff_" + ss.game_difficulty)} Â· {cfg["elo"]}) '
+            f'<div class="playerline">🤖 <b>{t("bot")}</b> ({t("diff_" + ss.game_difficulty)} · {cfg["elo"]}) '
             f'{captured_by(board, bot_color)}{bot_adv}</div>',
             unsafe_allow_html=True,
         )
@@ -1449,40 +1433,40 @@ with col_board:
 
     if not in_puzzle:
         st.markdown(
-            f'<div class="playerline">ð¤ <b>{t("you")}</b> {captured_by(board, ss.player_color)}{you_adv}</div>',
+            f'<div class="playerline">👤 <b>{t("you")}</b> {captured_by(board, ss.player_color)}{you_adv}</div>',
             unsafe_allow_html=True,
         )
         if not ss.game_over:
-            st.caption(("â ï¸ " + t("check")) if board.is_check() else t("your_turn"))
+            st.caption(("⚠️ " + t("check")) if board.is_check() else t("your_turn"))
         if not ss.rated and not ss.game_over:
-            st.caption("â¹ï¸ " + t("unrated_note"))
+            st.caption("ℹ️ " + t("unrated_note"))
 
     if ss.pending_promo:
         st.markdown(f"**{t('promote_to')}:**")
         promo_cols = st.columns(4)
-        for pc, (ptype, glyph) in zip(promo_cols, [(chess.QUEEN, "â"), (chess.ROOK, "â"),
-                                                  (chess.BISHOP, "â"), (chess.KNIGHT, "â")]):
+        for pc, (ptype, glyph) in zip(promo_cols, [(chess.QUEEN, "♛"), (chess.ROOK, "♜"),
+                                                  (chess.BISHOP, "♝"), (chess.KNIGHT, "♞")]):
             pc.button(glyph, key=f"promo_{ptype}", on_click=on_promote, args=(ptype,), width="stretch")
 
     if in_puzzle:
         p1, p2 = st.columns(2)
-        p1.button("ðï¸ " + t("puzzle_giveup"), key="btn_giveup", on_click=on_giveup_puzzle,
+        p1.button("👁️ " + t("puzzle_giveup"), key="btn_giveup", on_click=on_giveup_puzzle,
                   width="stretch", disabled=ss.puzzle["done"])
-        p2.button("â©ï¸ " + t("puzzle_exit"), key="btn_exit", on_click=on_exit_puzzle, width="stretch")
+        p2.button("↩️ " + t("puzzle_exit"), key="btn_exit", on_click=on_exit_puzzle, width="stretch")
     else:
         a1, a2, a3 = st.columns(3)
-        a1.button("ð¡ " + t("hint"), key="btn_hint", on_click=on_hint, width="stretch", disabled=not can_move)
-        a2.button("â©ï¸ " + t("undo"), key="btn_undo", on_click=on_undo, width="stretch",
+        a1.button("💡 " + t("hint"), key="btn_hint", on_click=on_hint, width="stretch", disabled=not can_move)
+        a2.button("↩️ " + t("undo"), key="btn_undo", on_click=on_undo, width="stretch",
                   help=t("undo_help"), disabled=not ss.board.move_stack)
-        a3.button("ð³ï¸ " + t("resign"), key="btn_resign", on_click=on_resign, width="stretch",
+        a3.button("🏳️ " + t("resign"), key="btn_resign", on_click=on_resign, width="stretch",
                   disabled=ss.game_over or not ss.board.move_stack)
 
 # ---------------- Dashboard column ----------------
 with col_dash:
     with st.container(key="panel"):
         tab_review, tab_puzzles, tab_coach, tab_opening, tab_history = st.tabs([
-            "ð " + t("tab_review"), "ð§© " + t("tab_puzzles"), "ð " + t("tab_coach"),
-            "ð " + t("tab_opening"), "ð " + t("tab_history"),
+            "📊 " + t("tab_review"), "🧩 " + t("tab_puzzles"), "👑 " + t("tab_coach"),
+            "📖 " + t("tab_opening"), "📜 " + t("tab_history"),
         ])
 
         # ----- Review -----
@@ -1502,13 +1486,13 @@ with col_dash:
                     st.markdown(f"**{t('key_moments')}**")
                     for i, r in worst:
                         num = f"{i // 2 + 1}{'.' if i % 2 == 0 else '...'}"
-                        better = f" â {t('better_was')} **{r['best_san']}**" if r["best_san"] else ""
+                        better = f" → {t('better_was')} **{r['best_san']}**" if r["best_san"] else ""
                         st.write(f"{CAT_ICON[r['cat']]} {num} {r['san']} ({t('cat_' + r['cat'])}){better}")
             else:
                 st.info(t("no_moves"))
 
             st.markdown("---")
-            st.subheader("ð " + t("eval_graph"))
+            st.subheader("📈 " + t("eval_graph"))
             if ss.log:
                 chart = pd.DataFrame({
                     "Move": list(range(1, len(ss.log) + 1)),
@@ -1518,16 +1502,16 @@ with col_dash:
 
         # ----- Puzzles -----
         with tab_puzzles:
-            st.subheader("ð§© " + t("puzzle_title"))
+            st.subheader("🧩 " + t("puzzle_title"))
             if ss.puzzles:
                 solved = sum(1 for p in ss.puzzles if p["solved"])
-                st.write(f"**{len(ss.puzzles)}** {t('puzzle_count')} Â· **{solved}** {t('puzzle_solved')}")
+                st.write(f"**{len(ss.puzzles)}** {t('puzzle_count')} · **{solved}** {t('puzzle_solved')}")
                 st.selectbox(
                     t("puzzle_pick"), list(range(len(ss.puzzles))), key="puzzle_pick",
-                    format_func=lambda i: f"#{i + 1} Â· {ss.puzzles[i]['move_no']}. {ss.puzzles[i]['played_san']}"
-                                          f" {'â' if ss.puzzles[i]['solved'] else 'ð§©'}",
+                    format_func=lambda i: f"#{i + 1} · {ss.puzzles[i]['move_no']}. {ss.puzzles[i]['played_san']}"
+                                          f" {'✅' if ss.puzzles[i]['solved'] else '🧩'}",
                 )
-                st.button("â¶ï¸ " + t("puzzle_start"), key="btn_puzzle_start", on_click=on_start_puzzle,
+                st.button("▶️ " + t("puzzle_start"), key="btn_puzzle_start", on_click=on_start_puzzle,
                           width="stretch")
             else:
                 st.info(t("puzzle_none"))
@@ -1536,12 +1520,12 @@ with col_dash:
         with tab_coach:
             persona = ss.get("persona", next(iter(PERSONAS)))
             st.markdown(
-                f'<div class="coach-box"><b>ð {persona}:</b> {PERSONAS[persona]["intro"]}</div>',
+                f'<div class="coach-box"><b>👑 {persona}:</b> {PERSONAS[persona]["intro"]}</div>',
                 unsafe_allow_html=True,
             )
             fb = ss.feedback
             if fb:
-                text = (f"**{CAT_ICON[fb['cat']]} {t('cat_' + fb['cat'])} â {fb['san']}**  \n"
+                text = (f"**{CAT_ICON[fb['cat']]} {t('cat_' + fb['cat'])} — {fb['san']}**  \n"
                         f"*\"{fb['quote']}\"*")
                 getattr(st, CAT_ALERT[fb["cat"]])(text)
             if ss.explanation:
@@ -1551,7 +1535,7 @@ with col_dash:
 
         # ----- Opening -----
         with tab_opening:
-            st.subheader("ð " + t("tab_opening"))
+            st.subheader("📖 " + t("tab_opening"))
             game_board = ss.board
             name, master_moves = local_opening_name(game_board), []
             if len(game_board.move_stack) <= 24 and time.time() >= ss.get("opening_retry_at", 0):
@@ -1561,7 +1545,7 @@ with col_dash:
                 except Exception:
                     master_moves = []
                     ss.opening_retry_at = time.time() + 300  # back off for 5 minutes
-            st.info(f"**{t('opening_id')}:** {name or 'â'}")
+            st.info(f"**{t('opening_id')}:** {name or '—'}")
             if master_moves:
                 st.markdown(f"**{t('top_master')}:**")
                 st.dataframe(
