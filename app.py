@@ -1073,6 +1073,12 @@ TINT_SELECT = "rgba(20,160,255,.55)"
 TINT_HINT = "rgba(0,200,83,.55)"
 CHECK_GRADIENT = "radial-gradient(circle, rgba(255,0,0,.9) 0%, rgba(255,0,0,0) 75%)"
 
+# A subtle metallic shimmer painted onto the piece glyphs themselves (ivory/gold for
+# the light side, graphite/bronze for the dark side) — layered on top of the existing
+# outline shadow, so pieces read as engraved rather than flat text on every theme.
+WHITE_PIECE_GRADIENT = "linear-gradient(145deg, #fffdf6 0%, #f0dd9e 40%, #fffdf6 62%, #d8b45f 100%)"
+BLACK_PIECE_GRADIENT = "linear-gradient(145deg, #5a4630 0%, #17120c 45%, #4a3a26 68%, #1d1610 100%)"
+
 
 def tint(color):
     return f"linear-gradient({color},{color})"
@@ -1143,6 +1149,12 @@ def board_css(board, orientation, colors, selected, targets, last_move, hint_uci
             f"color:{fg} !important; text-shadow:{shadow} !important; box-shadow:{box_shadow} !important; "
             f"outline:none !important; }}"
         )
+        if piece:
+            grad = WHITE_PIECE_GRADIENT if piece.color == chess.WHITE else BLACK_PIECE_GRADIENT
+            out.append(
+                f"{sel} p {{ background-image:{grad} !important; -webkit-background-clip:text !important; "
+                f"background-clip:text !important; -webkit-text-fill-color:transparent !important; }}"
+            )
 
         coord_color = colors["dark"] if light else colors["light"]
         coord_style = f"position:absolute; font-size:11px; font-weight:700; line-height:1; color:{coord_color}; text-shadow:none;"
@@ -1349,8 +1361,19 @@ if theme_name == "Old Money":
     # Warm, muted "old money" chrome: parchment text, brass accents, a serif
     # typeface, in place of the default dark/neon-green tech look.
     css += """
-    .stApp { background-color: #171310 !important; }
-    .stApp, .stApp p, .stApp li, .stApp span, .stApp label, .stApp div { font-family: Georgia, 'Times New Roman', serif !important; }
+    .stApp { background-color: #171310 !important; font-family: Georgia, 'Times New Roman', serif; }
+    .stMarkdown, .stCaption, h1, h2, h3, h4, h5, h6,
+    .stButton button, .stDownloadButton button,
+    div[data-testid="stMetricValue"], div[data-testid="stMetricLabel"],
+    .game-over-banner, .coach-box, .puzzle-banner, .playerline {
+        font-family: Georgia, 'Times New Roman', serif !important;
+    }
+    /* Never touch Streamlit's own icon font (chevrons, arrows, etc.) — forcing a
+       serif font onto it makes it fall back to showing the icon's literal name,
+       e.g. "keyboard_double_arrow_right", instead of the glyph. */
+    [data-testid="stIconMaterial"], [class*="material-symbols"], [class*="material-icons"] {
+        font-family: 'Material Symbols Rounded', 'Material Symbols Outlined', 'Material Icons', sans-serif !important;
+    }
     section[data-testid="stSidebar"] { background-color: #1d1712 !important; border-right: 1px solid #5c4430; }
     .game-over-banner, .coach-box, .puzzle-banner {
         background:#241d16 !important; border-color:#8a6d3b !important;
