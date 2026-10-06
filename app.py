@@ -11,6 +11,7 @@ Rating, win/loss record and badges persist between sessions in a small JSON file
 next to this script (chess_coach_profile.json), or wherever CHESS_COACH_PROFILE
 points. Delete that file, or use "Reset rating" in the sidebar, to start over.
 """
+import base64
 import json
 import math
 import os
@@ -149,19 +150,14 @@ OPENINGS_DB = {
     "f2f4": "Bird's Opening",
 }
 
-# Every theme may optionally override piece coloring (otherwise plain white/black
-# pieces with a dark/light outline are used — see board_css).
+# Square colors only — piece artwork (see PIECE_DATA_URI below) is the same
+# hand-drawn ivory/bronze set on every theme, so themes just set the board.
 THEMES = {
     "Classic Wood": {"light": "#f0d9b5", "dark": "#b58863"},
     "Lichess Green": {"light": "#ffffdd", "dark": "#86a666"},
     "Midnight Dark": {"light": "#9e9e9e", "dark": "#424242"},
     "Neon Cyber": {"light": "#2a2d37", "dark": "#00adb5"},
-    "Old Money": {
-        "light": "#e4d9bd", "dark": "#5c4430",
-        "white_piece": "#f6ecd2", "white_shadow": "0 0 1px #2a1d10, 0 1px 2px rgba(0,0,0,.5)",
-        "black_piece": "#241a10", "black_shadow": "0 0 1px #d9c48f, 0 1px 1px rgba(0,0,0,.4)",
-        "accent": "#8a6d3b",
-    },
+    "Old Money": {"light": "#e4d9bd", "dark": "#5c4430"},
 }
 
 # "elo" below ~1320 falls back to Stockfish "Skill Level" (UCI_Elo has a minimum).
@@ -1073,11 +1069,82 @@ TINT_SELECT = "rgba(20,160,255,.55)"
 TINT_HINT = "rgba(0,200,83,.55)"
 CHECK_GRADIENT = "radial-gradient(circle, rgba(255,0,0,.9) 0%, rgba(255,0,0,0) 75%)"
 
-# A subtle metallic shimmer painted onto the piece glyphs themselves (ivory/gold for
-# the light side, graphite/bronze for the dark side) — layered on top of the existing
-# outline shadow, so pieces read as engraved rather than flat text on every theme.
-WHITE_PIECE_GRADIENT = "linear-gradient(145deg, #fffdf6 0%, #f0dd9e 40%, #fffdf6 62%, #d8b45f 100%)"
-BLACK_PIECE_GRADIENT = "linear-gradient(145deg, #5a4630 0%, #17120c 45%, #4a3a26 68%, #1d1610 100%)"
+# ---------- Custom piece artwork ----------
+# Each piece is hand-drawn as a small set of SVG shapes on a 0-100 viewBox (original
+# silhouettes, not a copy of any existing chess-set font or image). They're rendered
+# as a CSS background-image on the square's button — not as styled text — so the
+# actual shapes differ per piece instead of just the color/outline.
+PIECE_PATHS = {
+    chess.PAWN: (
+        '<circle cx="50" cy="50" r="14"/>'
+        '<ellipse cx="50" cy="68" rx="10" ry="4"/>'
+        '<path d="M38,88 L62,88 L56,70 L44,70 Z"/>'
+        '<rect x="34" y="88" width="32" height="6" rx="2"/>'
+    ),
+    chess.ROOK: (
+        '<path d="M32,86 L68,86 L64,40 L36,40 Z"/>'
+        '<rect x="26" y="86" width="48" height="8" rx="1"/>'
+        '<rect x="28" y="30" width="44" height="12"/>'
+        '<rect x="28" y="16" width="10" height="14"/>'
+        '<rect x="45" y="16" width="10" height="14"/>'
+        '<rect x="62" y="16" width="10" height="14"/>'
+    ),
+    chess.KNIGHT: (
+        '<rect x="26" y="86" width="48" height="8" rx="1"/>'
+        '<path d="M34,86 L60,86 L56,54 L38,54 Z"/>'
+        '<ellipse cx="48" cy="42" rx="16" ry="13" transform="rotate(-20 48 42)"/>'
+        '<path d="M60,40 L74,35 L70,47 L59,49 Z"/>'
+        '<path d="M37,30 L32,16 L45,27 Z"/>'
+    ),
+    chess.BISHOP: (
+        '<rect x="30" y="86" width="40" height="8" rx="2"/>'
+        '<path d="M36,86 Q30,55 50,50 Q35,40 50,28 Q38,20 50,12 Q62,20 50,28 '
+        'Q65,40 50,50 Q70,55 64,86 Z"/>'
+        '<circle cx="50" cy="8" r="5"/>'
+    ),
+    chess.QUEEN: (
+        '<rect x="28" y="86" width="44" height="8" rx="2"/>'
+        '<path d="M34,86 Q30,60 40,50 Q34,44 38,36 Q44,30 50,34 Q56,30 62,36 '
+        'Q66,44 60,50 Q70,60 66,86 Z"/>'
+        '<rect x="34" y="26" width="32" height="8" rx="2"/>'
+        '<circle cx="36" cy="22" r="4"/><circle cx="43" cy="20" r="4"/>'
+        '<circle cx="50" cy="19" r="4.5"/><circle cx="57" cy="20" r="4"/><circle cx="64" cy="22" r="4"/>'
+    ),
+    chess.KING: (
+        '<rect x="28" y="86" width="44" height="8" rx="2"/>'
+        '<path d="M34,86 Q30,60 40,50 Q34,44 38,36 Q44,30 50,34 Q56,30 62,36 '
+        'Q66,44 60,50 Q70,60 66,86 Z"/>'
+        '<rect x="34" y="26" width="32" height="8" rx="2"/>'
+        '<rect x="47" y="8" width="6" height="16"/><rect x="41" y="12" width="18" height="6"/>'
+    ),
+}
+
+# Ivory/gold shimmer for the light side, graphite/bronze for the dark side — same
+# palette as the rest of the "cooler" piece treatment, now baked into real artwork.
+_WHITE_STOPS = ('<stop offset="0%" stop-color="#fffdf6"/><stop offset="40%" stop-color="#f0dd9e"/>'
+                '<stop offset="62%" stop-color="#fffdf6"/><stop offset="100%" stop-color="#d8b45f"/>')
+_BLACK_STOPS = ('<stop offset="0%" stop-color="#5a4630"/><stop offset="45%" stop-color="#17120c"/>'
+                '<stop offset="68%" stop-color="#4a3a26"/><stop offset="100%" stop-color="#1d1610"/>')
+
+
+def _piece_data_uri(piece_type, is_white):
+    grad_id = f"pg{'w' if is_white else 'b'}{piece_type}"
+    stops = _WHITE_STOPS if is_white else _BLACK_STOPS
+    stroke = "#2a1d10" if is_white else "#d9c48f"
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        f'<defs><linearGradient id="{grad_id}" x1="0%" y1="0%" x2="100%" y2="100%">{stops}</linearGradient></defs>'
+        f'<g fill="url(#{grad_id})" stroke="{stroke}" stroke-width="2" stroke-linejoin="round">'
+        f'{PIECE_PATHS[piece_type]}</g></svg>'
+    )
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
+
+
+# Precomputed once at import time — these never change at runtime.
+PIECE_DATA_URI = {
+    (pt, color): _piece_data_uri(pt, color == chess.WHITE)
+    for pt in PIECE_PATHS for color in (chess.WHITE, chess.BLACK)
+}
 
 
 def tint(color):
@@ -1114,16 +1181,17 @@ def board_css(board, orientation, colors, selected, targets, last_move, hint_uci
         base = colors["light"] if light else colors["dark"]
         piece = board.piece_at(sq)
 
-        layers = []
+        # Translucent tints (check glow, selection, last move, hint) — painted
+        # *under* the piece artwork so the piece stays crisp on top of them.
+        tints = []
         if sq == check_sq:
-            layers.append(CHECK_GRADIENT)
+            tints.append(CHECK_GRADIENT)
         if selected == sq:
-            layers.append(tint(TINT_SELECT))
+            tints.append(tint(TINT_SELECT))
         if last_move and sq in (last_move.from_square, last_move.to_square):
-            layers.append(tint(TINT_LAST))
+            tints.append(tint(TINT_LAST))
         if hint and sq in (hint.from_square, hint.to_square):
-            layers.append(tint(TINT_HINT))
-        background = ", ".join(layers + [base])
+            tints.append(tint(TINT_HINT))
 
         shadows = []
         if sq in rings:
@@ -1132,29 +1200,36 @@ def board_css(board, orientation, colors, selected, targets, last_move, hint_uci
             shadows.append("inset 0 0 0 4px rgba(224,67,58,.95)")
         box_shadow = ", ".join(shadows) if shadows else "none"
 
-        if piece and piece.color == chess.WHITE:
-            fg = colors.get("white_piece", "#ffffff")
-            shadow = colors.get("white_shadow", "0 0 2px #000, 0 0 3px #000, 0 1px 2px #000")
-        elif piece:
-            fg = colors.get("black_piece", "#151515")
-            shadow = colors.get("black_shadow", "0 0 2px #fff, 0 0 3px #fff")
-        elif sq in targets:
-            fg, shadow = "rgba(46,139,255,.9)", "none"
-        else:
-            fg, shadow = "transparent", "none"
+        # The piece itself is now real vector artwork (see PIECE_DATA_URI), not
+        # styled text, so the button's own text is only ever the empty-square
+        # dot or (for pieces) an invisible accessibility label.
+        images, sizes, positions, repeats = [], [], [], []
+        if piece:
+            images.append(f"url('{PIECE_DATA_URI[(piece.piece_type, piece.color)]}')")
+            sizes.append("72% 72%")
+            positions.append("center")
+            repeats.append("no-repeat")
+        for t in tints:
+            images.append(t)
+            sizes.append("100% 100%")
+            positions.append("center")
+            repeats.append("no-repeat")
+        if not images:
+            images, sizes, positions, repeats = ["none"], ["auto"], ["0 0"], ["no-repeat"]
+
+        fg = "rgba(46,139,255,.9)" if (sq in targets and not piece) else "transparent"
 
         sel = f".st-key-sq_{name} button"
         out.append(
-            f"{sel}, {sel}:hover, {sel}:focus, {sel}:active {{ background:{background} !important; "
-            f"color:{fg} !important; text-shadow:{shadow} !important; box-shadow:{box_shadow} !important; "
+            f"{sel}, {sel}:hover, {sel}:focus, {sel}:active {{ "
+            f"background-color:{base} !important; "
+            f"background-image:{', '.join(images)} !important; "
+            f"background-size:{', '.join(sizes)} !important; "
+            f"background-position:{', '.join(positions)} !important; "
+            f"background-repeat:{', '.join(repeats)} !important; "
+            f"color:{fg} !important; text-shadow:none !important; box-shadow:{box_shadow} !important; "
             f"outline:none !important; }}"
         )
-        if piece:
-            grad = WHITE_PIECE_GRADIENT if piece.color == chess.WHITE else BLACK_PIECE_GRADIENT
-            out.append(
-                f"{sel} p {{ background-image:{grad} !important; -webkit-background-clip:text !important; "
-                f"background-clip:text !important; -webkit-text-fill-color:transparent !important; }}"
-            )
 
         coord_color = colors["dark"] if light else colors["light"]
         coord_style = f"position:absolute; font-size:11px; font-weight:700; line-height:1; color:{coord_color}; text-shadow:none;"
