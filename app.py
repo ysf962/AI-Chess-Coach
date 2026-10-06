@@ -1128,14 +1128,27 @@ _BLACK_STOPS = ('<stop offset="0%" stop-color="#5a4630"/><stop offset="45%" stop
 
 
 def _piece_data_uri(piece_type, is_white):
+    """A glossy, drop-shadowed render of the piece: a soft contact shadow on the
+    square, the shape itself, then a diagonal glass-like highlight on top — the
+    combination that reads as "3D tournament piece" rather than a flat icon."""
     grad_id = f"pg{'w' if is_white else 'b'}{piece_type}"
+    shadow_id = f"ds{'w' if is_white else 'b'}{piece_type}"
     stops = _WHITE_STOPS if is_white else _BLACK_STOPS
     stroke = "#2a1d10" if is_white else "#d9c48f"
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-        f'<defs><linearGradient id="{grad_id}" x1="0%" y1="0%" x2="100%" y2="100%">{stops}</linearGradient></defs>'
-        f'<g fill="url(#{grad_id})" stroke="{stroke}" stroke-width="2" stroke-linejoin="round">'
-        f'{PIECE_PATHS[piece_type]}</g></svg>'
+        f'<defs>'
+        f'<linearGradient id="{grad_id}" x1="0%" y1="0%" x2="100%" y2="100%">{stops}</linearGradient>'
+        f'<filter id="{shadow_id}" x="-30%" y="-30%" width="160%" height="160%">'
+        f'<feDropShadow dx="1.5" dy="3" stdDeviation="1.6" flood-color="#000" flood-opacity="0.5"/>'
+        f'</filter>'
+        f'</defs>'
+        f'<ellipse cx="50" cy="92" rx="21" ry="4.5" fill="#000" opacity="0.25"/>'
+        f'<g filter="url(#{shadow_id})" fill="url(#{grad_id})" stroke="{stroke}" '
+        f'stroke-width="2" stroke-linejoin="round">{PIECE_PATHS[piece_type]}</g>'
+        f'<ellipse cx="40" cy="38" rx="8" ry="17" fill="#ffffff" opacity="0.22" '
+        f'transform="rotate(-18 40 38)"/>'
+        f'</svg>'
     )
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
 
