@@ -1081,82 +1081,76 @@ PIECE_PATHS = {
         '<path d="M40,88 L60,88 L55,72 L45,72 Z"/>'
         '<rect x="32" y="88" width="36" height="7" rx="2"/>'
     ),
+    # The only piece with a flat, notched top — three bold square merlons,
+    # like a real castle battlement. No other piece has a rectangular silhouette.
     chess.ROOK: (
         '<path d="M33,88 L67,88 L63,42 L37,42 Z"/>'
         '<rect x="27" y="88" width="46" height="7" rx="1"/>'
-        '<rect x="29" y="32" width="42" height="10"/>'
-        '<rect x="29" y="18" width="9" height="14"/>'
-        '<rect x="45.5" y="18" width="9" height="14"/>'
-        '<rect x="62" y="18" width="9" height="14"/>'
+        '<rect x="29" y="30" width="42" height="10"/>'
+        '<rect x="29" y="14" width="9" height="18"/>'
+        '<rect x="45.5" y="14" width="9" height="18"/>'
+        '<rect x="62" y="14" width="9" height="18"/>'
     ),
-    # A horse head in profile: neck, a jagged mane along the back, the head,
-    # a pointed muzzle and a pointed ear — the features that read as "knight"
-    # rather than a generic blob, distinct from every other piece's silhouette.
+    # A horse head in profile: neck, two angular mane spikes, the head, a
+    # pointed muzzle jutting to one side and a tall ear — the only piece whose
+    # outline is lopsided left-to-right instead of symmetric.
     chess.KNIGHT: (
         '<rect x="27" y="88" width="46" height="7" rx="1"/>'
         '<path d="M35,88 L65,88 L58,52 L40,52 Z"/>'
-        '<path d="M58,34 Q64,30 60,24 Q67,22 61,16 Q66,14 59,10 L54,16 '
-        'Q58,20 52,24 Q57,28 52,34 Z"/>'
-        '<ellipse cx="46" cy="34" rx="14" ry="11" transform="rotate(-25 46 34)"/>'
-        '<path d="M58,32 L74,26 L70,40 L57,41 Z"/>'
-        '<path d="M36,24 L30,8 L44,22 Z"/>'
+        '<path d="M56,34 L64,24 L56,22 Z"/>'
+        '<path d="M52,22 L58,10 L50,14 Z"/>'
+        '<ellipse cx="46" cy="34" rx="15" ry="12" transform="rotate(-25 46 34)"/>'
+        '<path d="M58,30 L78,22 L72,42 L56,40 Z"/>'
+        '<path d="M34,26 L26,6 L46,24 Z"/>'
     ),
-    # Slimmer than queen/king, with a carved diagonal slit near the top — the
-    # one detail that uniquely identifies a bishop.
+    # Tall and narrow (the slimmest body of the six) with a sharp ball-topped
+    # point and a wide carved slit — the one piece with a pointed, not flat
+    # or crowned, top.
     chess.BISHOP: (
         '<rect x="33" y="88" width="34" height="7" rx="2"/>'
         '<path d="M39,88 Q33,62 44,52 Q36,46 40,36 Q36,30 44,22 Q40,16 50,8 '
         'Q60,16 56,22 Q64,30 60,36 Q64,46 56,52 Q67,62 61,88 Z"/>'
-        '<ellipse cx="50" cy="26" rx="1.6" ry="7" transform="rotate(35 50 26)" '
+        '<ellipse cx="50" cy="24" rx="2.5" ry="9" transform="rotate(35 50 24)" '
         'fill="rgba(0,0,0,.35)" stroke="none"/>'
-        '<circle cx="50" cy="6" r="4.5"/>'
+        '<circle cx="50" cy="4" r="5.5"/>'
     ),
-    # Hourglass body, flared at the hem — topped with a scalloped crown of
-    # five pearls. Deliberately curvier than the king.
+    # Wide hourglass body flaring in and out, topped with five round pearls
+    # spread wide across the crown — the only piece with ball-topped spikes
+    # in a row, as opposed to the king's single cross.
     chess.QUEEN: (
-        '<rect x="27" y="88" width="46" height="7" rx="2"/>'
-        '<path d="M33,88 Q28,66 36,56 Q30,50 34,42 Q40,34 50,38 Q60,34 66,42 '
-        'Q70,50 64,56 Q72,66 67,88 Z"/>'
-        '<rect x="32" y="28" width="36" height="8" rx="2"/>'
-        '<circle cx="35" cy="24" r="3.6"/><circle cx="42.5" cy="21" r="3.6"/>'
-        '<circle cx="50" cy="19.5" r="4"/><circle cx="57.5" cy="21" r="3.6"/><circle cx="65" cy="24" r="3.6"/>'
+        '<rect x="25" y="88" width="50" height="7" rx="2"/>'
+        '<path d="M30,88 Q25,66 34,56 Q28,50 32,42 Q39,34 50,38 Q61,34 68,42 '
+        'Q72,50 66,56 Q75,66 70,88 Z"/>'
+        '<rect x="30" y="26" width="40" height="9" rx="2"/>'
+        '<circle cx="33" cy="18" r="4.5"/><circle cx="41.5" cy="14" r="4.5"/>'
+        '<circle cx="50" cy="12" r="5.5"/><circle cx="58.5" cy="14" r="4.5"/><circle cx="67" cy="18" r="4.5"/>'
     ),
-    # Straight-sided, broad-shouldered robe (not hourglass like the queen) —
-    # taller overall, topped with a plain band and a cross, not pearls.
+    # Straight, broad-shouldered robe (not hourglass) — the tallest piece on
+    # the board, topped with a single large cross instead of a crown.
     chess.KING: (
-        '<rect x="27" y="88" width="46" height="7" rx="2"/>'
-        '<path d="M32,88 Q29,68 33,54 L34,40 Q34,32 40,28 L60,28 Q66,32 66,40 '
-        'L67,54 Q71,68 68,88 Z"/>'
-        '<rect x="32" y="22" width="36" height="8" rx="2"/>'
-        '<rect x="47" y="4" width="6" height="16"/><rect x="41" y="8" width="18" height="6"/>'
+        '<rect x="25" y="88" width="50" height="7" rx="2"/>'
+        '<path d="M30,88 Q27,68 31,54 L32,40 Q32,32 38,28 L62,28 Q68,32 68,40 '
+        'L69,54 Q73,68 70,88 Z"/>'
+        '<rect x="30" y="26" width="40" height="9" rx="2"/>'
+        '<rect x="46" y="0" width="8" height="24"/><rect x="37" y="8" width="26" height="8"/>'
     ),
 }
 
-# Ivory/gold shimmer for the light side, graphite/bronze for the dark side — same
-# palette as the rest of the "cooler" piece treatment, now baked into real artwork.
-_WHITE_STOPS = '<stop offset="0%" stop-color="#f3e8cc"/><stop offset="100%" stop-color="#c7a765"/>'
-_BLACK_STOPS = '<stop offset="0%" stop-color="#473924"/><stop offset="100%" stop-color="#1b140c"/>'
+# Flat, solid colors — no gradient, no shadow filter, no highlight. A thick
+# outline does the work of keeping each silhouette legible at small sizes.
+_WHITE_FILL = "#f2e8d2"
+_BLACK_FILL = "#241b12"
 
 
 def _piece_data_uri(piece_type, is_white):
-    """A matte, lightly-shaded render of the piece: a soft contact shadow on the
-    square, then the shape itself shaded top-to-bottom like something lit from
-    above — no gloss streak, so it reads as carved wood/resin, not plastic."""
-    grad_id = f"pg{'w' if is_white else 'b'}{piece_type}"
-    shadow_id = f"ds{'w' if is_white else 'b'}{piece_type}"
-    stops = _WHITE_STOPS if is_white else _BLACK_STOPS
+    """Plain flat-color piece artwork: just the shape and a bold outline —
+    deliberately no gradient, no drop shadow, no gloss of any kind."""
+    fill = _WHITE_FILL if is_white else _BLACK_FILL
     stroke = "#2a1d10" if is_white else "#d9c48f"
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-        f'<defs>'
-        f'<linearGradient id="{grad_id}" x1="50%" y1="0%" x2="50%" y2="100%">{stops}</linearGradient>'
-        f'<filter id="{shadow_id}" x="-30%" y="-30%" width="160%" height="160%">'
-        f'<feDropShadow dx="1" dy="2" stdDeviation="1.1" flood-color="#000" flood-opacity="0.3"/>'
-        f'</filter>'
-        f'</defs>'
-        f'<ellipse cx="50" cy="92" rx="21" ry="4.5" fill="#000" opacity="0.18"/>'
-        f'<g filter="url(#{shadow_id})" fill="url(#{grad_id})" stroke="{stroke}" '
-        f'stroke-width="2" stroke-linejoin="round">{PIECE_PATHS[piece_type]}</g>'
+        f'<g fill="{fill}" stroke="{stroke}" stroke-width="3" stroke-linejoin="round">'
+        f'{PIECE_PATHS[piece_type]}</g>'
         f'</svg>'
     )
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
@@ -1228,7 +1222,7 @@ def board_css(board, orientation, colors, selected, targets, last_move, hint_uci
         images, sizes, positions, repeats = [], [], [], []
         if piece:
             images.append(f"url('{PIECE_DATA_URI[(piece.piece_type, piece.color)]}')")
-            sizes.append("72% 72%")
+            sizes.append("82% 82%")
             positions.append("center")
             repeats.append("no-repeat")
         for t in tints:
