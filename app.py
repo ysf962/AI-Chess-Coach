@@ -1134,16 +1134,14 @@ PIECE_PATHS = {
 
 # Ivory/gold shimmer for the light side, graphite/bronze for the dark side — same
 # palette as the rest of the "cooler" piece treatment, now baked into real artwork.
-_WHITE_STOPS = ('<stop offset="0%" stop-color="#fffdf6"/><stop offset="40%" stop-color="#f0dd9e"/>'
-                '<stop offset="62%" stop-color="#fffdf6"/><stop offset="100%" stop-color="#d8b45f"/>')
-_BLACK_STOPS = ('<stop offset="0%" stop-color="#5a4630"/><stop offset="45%" stop-color="#17120c"/>'
-                '<stop offset="68%" stop-color="#4a3a26"/><stop offset="100%" stop-color="#1d1610"/>')
+_WHITE_STOPS = '<stop offset="0%" stop-color="#f3e8cc"/><stop offset="100%" stop-color="#c7a765"/>'
+_BLACK_STOPS = '<stop offset="0%" stop-color="#473924"/><stop offset="100%" stop-color="#1b140c"/>'
 
 
 def _piece_data_uri(piece_type, is_white):
-    """A glossy, drop-shadowed render of the piece: a soft contact shadow on the
-    square, the shape itself, then a diagonal glass-like highlight on top — the
-    combination that reads as "3D tournament piece" rather than a flat icon."""
+    """A matte, lightly-shaded render of the piece: a soft contact shadow on the
+    square, then the shape itself shaded top-to-bottom like something lit from
+    above — no gloss streak, so it reads as carved wood/resin, not plastic."""
     grad_id = f"pg{'w' if is_white else 'b'}{piece_type}"
     shadow_id = f"ds{'w' if is_white else 'b'}{piece_type}"
     stops = _WHITE_STOPS if is_white else _BLACK_STOPS
@@ -1151,16 +1149,14 @@ def _piece_data_uri(piece_type, is_white):
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
         f'<defs>'
-        f'<linearGradient id="{grad_id}" x1="0%" y1="0%" x2="100%" y2="100%">{stops}</linearGradient>'
+        f'<linearGradient id="{grad_id}" x1="50%" y1="0%" x2="50%" y2="100%">{stops}</linearGradient>'
         f'<filter id="{shadow_id}" x="-30%" y="-30%" width="160%" height="160%">'
-        f'<feDropShadow dx="1.5" dy="3" stdDeviation="1.6" flood-color="#000" flood-opacity="0.5"/>'
+        f'<feDropShadow dx="1" dy="2" stdDeviation="1.1" flood-color="#000" flood-opacity="0.3"/>'
         f'</filter>'
         f'</defs>'
-        f'<ellipse cx="50" cy="92" rx="21" ry="4.5" fill="#000" opacity="0.25"/>'
+        f'<ellipse cx="50" cy="92" rx="21" ry="4.5" fill="#000" opacity="0.18"/>'
         f'<g filter="url(#{shadow_id})" fill="url(#{grad_id})" stroke="{stroke}" '
         f'stroke-width="2" stroke-linejoin="round">{PIECE_PATHS[piece_type]}</g>'
-        f'<ellipse cx="40" cy="38" rx="8" ry="17" fill="#ffffff" opacity="0.22" '
-        f'transform="rotate(-18 40 38)"/>'
         f'</svg>'
     )
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
