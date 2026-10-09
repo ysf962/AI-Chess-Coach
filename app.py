@@ -1076,46 +1076,59 @@ CHECK_GRADIENT = "radial-gradient(circle, rgba(255,0,0,.9) 0%, rgba(255,0,0,0) 7
 # actual shapes differ per piece instead of just the color/outline.
 PIECE_PATHS = {
     chess.PAWN: (
-        '<circle cx="50" cy="50" r="14"/>'
-        '<ellipse cx="50" cy="68" rx="10" ry="4"/>'
-        '<path d="M38,88 L62,88 L56,70 L44,70 Z"/>'
-        '<rect x="34" y="88" width="32" height="6" rx="2"/>'
+        '<circle cx="50" cy="52" r="13"/>'
+        '<ellipse cx="50" cy="70" rx="9" ry="3.5"/>'
+        '<path d="M40,88 L60,88 L55,72 L45,72 Z"/>'
+        '<rect x="32" y="88" width="36" height="7" rx="2"/>'
     ),
     chess.ROOK: (
-        '<path d="M32,86 L68,86 L64,40 L36,40 Z"/>'
-        '<rect x="26" y="86" width="48" height="8" rx="1"/>'
-        '<rect x="28" y="30" width="44" height="12"/>'
-        '<rect x="28" y="16" width="10" height="14"/>'
-        '<rect x="45" y="16" width="10" height="14"/>'
-        '<rect x="62" y="16" width="10" height="14"/>'
+        '<path d="M33,88 L67,88 L63,42 L37,42 Z"/>'
+        '<rect x="27" y="88" width="46" height="7" rx="1"/>'
+        '<rect x="29" y="32" width="42" height="10"/>'
+        '<rect x="29" y="18" width="9" height="14"/>'
+        '<rect x="45.5" y="18" width="9" height="14"/>'
+        '<rect x="62" y="18" width="9" height="14"/>'
     ),
+    # A horse head in profile: neck, a jagged mane along the back, the head,
+    # a pointed muzzle and a pointed ear — the features that read as "knight"
+    # rather than a generic blob, distinct from every other piece's silhouette.
     chess.KNIGHT: (
-        '<rect x="26" y="86" width="48" height="8" rx="1"/>'
-        '<path d="M34,86 L60,86 L56,54 L38,54 Z"/>'
-        '<ellipse cx="48" cy="42" rx="16" ry="13" transform="rotate(-20 48 42)"/>'
-        '<path d="M60,40 L74,35 L70,47 L59,49 Z"/>'
-        '<path d="M37,30 L32,16 L45,27 Z"/>'
+        '<rect x="27" y="88" width="46" height="7" rx="1"/>'
+        '<path d="M35,88 L65,88 L58,52 L40,52 Z"/>'
+        '<path d="M58,34 Q64,30 60,24 Q67,22 61,16 Q66,14 59,10 L54,16 '
+        'Q58,20 52,24 Q57,28 52,34 Z"/>'
+        '<ellipse cx="46" cy="34" rx="14" ry="11" transform="rotate(-25 46 34)"/>'
+        '<path d="M58,32 L74,26 L70,40 L57,41 Z"/>'
+        '<path d="M36,24 L30,8 L44,22 Z"/>'
     ),
+    # Slimmer than queen/king, with a carved diagonal slit near the top — the
+    # one detail that uniquely identifies a bishop.
     chess.BISHOP: (
-        '<rect x="30" y="86" width="40" height="8" rx="2"/>'
-        '<path d="M36,86 Q30,55 50,50 Q35,40 50,28 Q38,20 50,12 Q62,20 50,28 '
-        'Q65,40 50,50 Q70,55 64,86 Z"/>'
-        '<circle cx="50" cy="8" r="5"/>'
+        '<rect x="33" y="88" width="34" height="7" rx="2"/>'
+        '<path d="M39,88 Q33,62 44,52 Q36,46 40,36 Q36,30 44,22 Q40,16 50,8 '
+        'Q60,16 56,22 Q64,30 60,36 Q64,46 56,52 Q67,62 61,88 Z"/>'
+        '<ellipse cx="50" cy="26" rx="1.6" ry="7" transform="rotate(35 50 26)" '
+        'fill="rgba(0,0,0,.35)" stroke="none"/>'
+        '<circle cx="50" cy="6" r="4.5"/>'
     ),
+    # Hourglass body, flared at the hem — topped with a scalloped crown of
+    # five pearls. Deliberately curvier than the king.
     chess.QUEEN: (
-        '<rect x="28" y="86" width="44" height="8" rx="2"/>'
-        '<path d="M34,86 Q30,60 40,50 Q34,44 38,36 Q44,30 50,34 Q56,30 62,36 '
-        'Q66,44 60,50 Q70,60 66,86 Z"/>'
-        '<rect x="34" y="26" width="32" height="8" rx="2"/>'
-        '<circle cx="36" cy="22" r="4"/><circle cx="43" cy="20" r="4"/>'
-        '<circle cx="50" cy="19" r="4.5"/><circle cx="57" cy="20" r="4"/><circle cx="64" cy="22" r="4"/>'
+        '<rect x="27" y="88" width="46" height="7" rx="2"/>'
+        '<path d="M33,88 Q28,66 36,56 Q30,50 34,42 Q40,34 50,38 Q60,34 66,42 '
+        'Q70,50 64,56 Q72,66 67,88 Z"/>'
+        '<rect x="32" y="28" width="36" height="8" rx="2"/>'
+        '<circle cx="35" cy="24" r="3.6"/><circle cx="42.5" cy="21" r="3.6"/>'
+        '<circle cx="50" cy="19.5" r="4"/><circle cx="57.5" cy="21" r="3.6"/><circle cx="65" cy="24" r="3.6"/>'
     ),
+    # Straight-sided, broad-shouldered robe (not hourglass like the queen) —
+    # taller overall, topped with a plain band and a cross, not pearls.
     chess.KING: (
-        '<rect x="28" y="86" width="44" height="8" rx="2"/>'
-        '<path d="M34,86 Q30,60 40,50 Q34,44 38,36 Q44,30 50,34 Q56,30 62,36 '
-        'Q66,44 60,50 Q70,60 66,86 Z"/>'
-        '<rect x="34" y="26" width="32" height="8" rx="2"/>'
-        '<rect x="47" y="8" width="6" height="16"/><rect x="41" y="12" width="18" height="6"/>'
+        '<rect x="27" y="88" width="46" height="7" rx="2"/>'
+        '<path d="M32,88 Q29,68 33,54 L34,40 Q34,32 40,28 L60,28 Q66,32 66,40 '
+        'L67,54 Q71,68 68,88 Z"/>'
+        '<rect x="32" y="22" width="36" height="8" rx="2"/>'
+        '<rect x="47" y="4" width="6" height="16"/><rect x="41" y="8" width="18" height="6"/>'
     ),
 }
 
